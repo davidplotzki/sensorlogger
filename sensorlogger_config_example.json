@@ -1,0 +1,163 @@
+{
+    "general": {
+        "comment": "This is an example configuration file to show all configuration options. You can often delete options that you don't need. Please refer to the manual for details.",
+        "logfile": "/home/username/sensorlogger.log"
+    },
+
+    "tinkerforge": {
+        "comment": "Connecting to the Brick Daemon, and error management.",
+        "host": "192.168.1.2",
+        "port": 4223,
+        "max_bricklet_read_failures":  2,
+        "max_brickd_restart_attempts": 3,
+        "brickd_restart_command": null,
+        "system_restart_command": null  
+    },
+
+    "mqtt": {
+        "comment": "Connecting and communicating with the MQTT broker.",
+        "host": "192.168.1.3",
+        "port": 1883,
+        "qos": 1,
+        "retained": false,
+        "connected_topic": "Sensorlogger/status",
+        "connected_message": "online",
+        "lwt_topic": "Sensorlogger/status",
+        "lwt_message": "offline"
+    },
+
+    "homematic": {
+        "comment": "URL of your HomeMatic's XML API",
+        "xmlapi_url": "http://192.168.1.4/config/xmlapi"
+    },
+
+    "sensors": [
+        {
+            "comment": "Tinkerforge sensor for outside temperature.",
+            "sensor_id": "Weather/Temperature",
+            "tinkerforge_uid": "z3L",
+            "channel": 0,
+            "factor": 1,
+            "offset": -4,
+            "counter": false,
+            "trigger": "periodic",
+            "rest_period": {"value": 60, "unit": "s"},
+            "mqtt_publish": "Weather/Temperature/current",
+            "homematic_publish": "25484"
+        },
+        {
+            "comment": "Tinkerforge IO bricklet triggers count events whenever getting to low state.",
+            "sensor_id": "Weather/Wind",
+            "tinkerforge_uid": "9Ws",
+            "channel": 0,
+            "counter": true,
+            "trigger": "low",
+            "rest_period": {"value": 8, "unit": "ms"},
+            "io_debounce": {"value": 8, "unit": "ms"}
+        },
+        {
+            "comment": "MQTT sensor for the living room temperature.",
+            "sensor_id": "House/Living_Room/Temperature",
+            "mqtt_subscribe": "House/Living_Room/Temperature/current",
+            "factor": 1,
+            "offset": 0,
+            "counter": false,
+            "trigger": "periodic",
+            "rest_period": {"value": 2, "unit": "min"},
+            "homematic_publish": "74633"
+        },
+        {
+            "comment": "HomeMatic sensor for the living room humidity.",
+            "sensor_id": "House/Living_Room/Humidity",
+            "homematic_subscribe": "94836",
+            "factor": 1,
+            "offset": 0,
+            "counter": false,
+            "trigger": "periodic",
+            "rest_period": {"value": 2, "unit": "min"},
+            "mqtt_publish": "House/Living_Room/Humidity/current"
+        },
+        {
+            "comment": "Current solar power from local JSON file.",
+            "sensor_id": "House/Solar/Power",
+            "json_file": "/var/log/solar.json",
+            "json_key":  ["solar", "creation", "power"],
+            "factor": 1,
+            "offset": 0,
+            "trigger": "periodic",
+            "rest_period": {"value": 5, "unit": "s"},
+            "mqtt_publish": "House/Solar/Power/current",
+            "homematic_publish": "23674"
+        }
+    ],
+
+    "logbooks": [
+        {
+            "filename": "weather.txt",
+            "cycle_time": {"value": 5, "unit": "min"},
+            "max_entries": 288,
+            "missing_data": "-",
+            "columns": [
+                {
+                    "title": "Temperature 15 minute average",
+                    "unit":  "°C",
+                    "sensor_id": "Weather/Temperature",
+                    "operation": "mean",
+                    "evaluation_period": {"value": 15, "unit": "min"},
+                    "mqtt_publish": "Weather/Temperature/average15min",
+                    "homematic_publish": "83472"
+                },
+                {
+                    "title": "Wind sensor rotation frequency",
+                    "unit":  "Hz",
+                    "sensor_id": "Weather/Wind",
+                    "operation": "freq",
+                    "mqtt_publish": "Weather/Wind/average15min",
+                    "homematic_publish": "75653"
+                }
+            ]
+        },
+        {
+            "filename": "house.txt",
+            "cycle_time": {"value": 15, "unit": "min"},
+            "max_entries": 48,
+            "missing_data": "-",
+            "columns": [
+                {
+                    "title": "Living room temperature",
+                    "unit":  "°C",
+                    "sensor_id": "House/Living_Room/Temperature",
+                    "operation": "mean",
+                    "mqtt_publish": "House/Living_Room/Temperature/average15min",
+                    "homematic_publish": "23545"
+                },
+                {
+                    "title": "Living room humidity",
+                    "unit":  "%rel.",
+                    "sensor_id": "House/Living_Room/Humidity",
+                    "operation": "mean",
+                    "mqtt_publish": "House/Living_Room/Humidity/average15min",
+                    "homematic_publish": "12736"
+                },
+                {
+                    "title": "Mean solar power (last 60 minutes)",
+                    "unit":  "W",
+                    "sensor_id": "House/Solar/Power",
+                    "operation": "mean",
+                    "evaluation_period": {"value": 1, "unit": "h"},
+                    "mqtt_publish": "House/Solar/Power/mean",
+                    "homematic_publish": "34653"
+                },
+                {
+                    "title": "Peak solar power (last 60 minutes)",
+                    "unit":  "W",
+                    "sensor_id": "House/Solar/Power",
+                    "operation": "max",
+                    "evaluation_period": {"value": 1, "unit": "h"},
+                    "mqtt_publish": "House/Solar/Power/peak",
+                    "homematic_publish": "34654"
+                }
+            ]
+        }
+    ]
+}

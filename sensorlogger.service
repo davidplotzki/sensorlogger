@@ -1,0 +1,16 @@
+# /etc/systemd/system/sensorlogger.service
+# ------------------------------------------
+# systemctl daemon-reload
+# systemctl enable sensorlogger 
+
+[Unit]
+Description=Sensorlogger
+
+[Service]
+WorkingDirectory=/home/username
+ExecStart=/home/username/sensorlogger
+User=username
+Group=users
+
+[Install]
+WantedBy=multi-user.target
