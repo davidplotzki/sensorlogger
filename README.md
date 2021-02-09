@@ -1,5 +1,5 @@
 # Sensorlogger
-Visit the [Sensorlogger website](https://tastyorange.de/projects/sensorlogger.htm) for a more structured documentation (also available in German).
+Visit the [Sensorlogger website](https://tastyorange.de/projects/sensorlogger.htm) for a more structured documentation. (Auch auf [Deutsch](https://tastyorange.de/projekte/sensorlogger.htm) verfügbar.)
 
 Sensorlogger reads sensor data and creates statistical reports in logbook tables. It can redistribute incoming sensor values, but also statistical summary data, to an MQTT broker or to a HomeMatic CCU. Its original purpose was to serve as a logger for a weather station equipped with Tinkerforge sensors, where data has to be averaged and logged every 15 minutes. However, Sensorlogger is very flexible and can be configured to serve many more purposes.
 
@@ -21,7 +21,7 @@ In the following listing you see a very simple example for a logbook file. It ke
 
 ## Data accumu­lation and statisti­cal summary
 
-Sensorlogger is able to read values from Tinkerforge sensors and JSON structures in user-defined **time intervals.** After reading, these values can be forwarded immediately to an MQTT broker or HomeMatic CCU. The values are also stored internally until they become irrelevant for any further statistical analysis.
+Sensorlogger is able to read values from Tinkerforge sensors and JSON structures in user-defined **time intervals.** After reading, these values can be forwarded immediately to an MQTT broker or HomeMatic CCU (the XML-API is used to set system variables using their ISE-ID). The values are also stored internally until they become irrelevant for any further statistical analysis.
 
 Data can also be received via **interrupts,** for example from Tinkerforge IO bricklets or via subscriptions to MQTT topics.
 
@@ -146,7 +146,7 @@ In the log file, status messages, warnings and errors will be reported. Please d
 Shown below is an example configuration file for the following scenario.
 
 + An outside **weather station** has two Tinkerforge sensors: one for temperature, another one for wind. A Temperature Bricklet is used for the temperature measurement. The wind anemometer is connected to an IO Bricklet at channel 0 and Sensorlogger is used to count digital events (whenever a *low* state is reached).
-+ In the **living room** we have a different temperature sensor that sends its measurements to an MQTT broker. Sensorlogger subscribes to its topic. Additionally, there is a HomeMatic humidity sensor in the living room. Sensorlogger reads its values every two minutes via the XML-API of the HomeMatic CCU. It is necessary that its values are accessible via a system variable and its ISE ID is known.
++ In the **living room** we have a different temperature sensor that sends its measurements to an MQTT broker. Sensorlogger subscribes to its topic. Additionally, there is a HomeMatic humidity sensor in the living room. Sensorlogger reads its datapoint values every two minutes via the XML-API from the HomeMatic CCU.
 + The **solar generator** is monitored by another application and its current state is reported in a local JSON file. The value for the currently produced electric power is read by Sensorlogger from its configured key sequence in the JSON tree.
 + Two **logbooks** are defined: one for the weather station and another one for the house. The **weather** logbook contains one line every five minutes. In two columns, it contains the mean temperature for the last 15 minutes and the wind anemometer’s rotation frequency for the last five minutes (which is the logbook’s cycle time). The logbook for the **house** contains two columns for the mean living room temperature and humidity of the last 15 minutes (again, the cycle time) and two more columns for the mean and maximum electric power produced during the past 60 minutes.
 + Both the current sensor values as well as the statistical results for the logbook columns are sent to the **MQTT broker** using their own topics, as well as to the **HomeMatic CCU** using the ISE IDs for special system variables.
@@ -692,9 +692,11 @@ The general `mqtt` section is used to configure the connection parameters to the
 
 ## HomeMatic settings
 
-You can set up a connection to a HomeMatic CCU to read and set system variables. Sensor values from other sources can also be sent to the CCU right after the measurement or after the statistical analysis. The communication is handled via the [XML-API](https://github.com/homematic-community/XML-API), which must be installed as an add-on for the HomeMatic CCU.
+You can set up a connection to a HomeMatic CCU to read numerical data points and to set system variables. This way, sensor values from other sources can be sent to the CCU right after the measurement or after the statistical analysis. The communication is handled via the [XML-API](https://github.com/homematic-community/XML-API), which must be installed as an add-on for the HomeMatic CCU.
 
-The URL to reach the XML-API must be specified in the general `homematic` section of your configuration file:
+To get an overview of the available data points for your CCU and their respective ISE-ID, you can access `statelist.cgi` which the XML-API provides. Sensorlogger can read such data points using queries to `state.cgi?datapoint_id=...`, and it can set the values of system variables using `statechange.cgi`.
+
+The root URL to reach the XML-API must be specified in the general `homematic` section of your configuration file:
 
 ```
 "homematic": {
@@ -707,7 +709,7 @@ The URL to reach the XML-API must be specified in the general `homematic` sectio
     Standard value: `null`
 
 
-### HomeMatic sensors
+### Reading HomeMatic data points
 
 ```
 "sensors": [
@@ -728,7 +730,7 @@ The URL to reach the XML-API must be specified in the general `homematic` sectio
 
 + `"sensor_id":` General, unique ID for the sensor that will later be referenced when defining statistics and logbooks.
 
-+ `"homematic_subscribe":` ISE-ID of the system variable to read periodically.
++ `"homematic_subscribe":` ISE-ID of the data point to read periodically.
 
 + `"factor":` Correction factor, see next point.
 

@@ -44,7 +44,7 @@ std::string homematic::getValue(const std::string &iseID) const
 {
 	if(_xmlAPI_URL.size() > 0)
 	{
-		std::string getterURL = _xmlAPI_URL + "/sysvar.cgi?ise_id=" + iseID;
+		std::string getterURL = _xmlAPI_URL + "/state.cgi?datapoint_id=" + iseID;
 
 		try
 		{
