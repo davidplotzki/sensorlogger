@@ -14,17 +14,22 @@
         "system_restart_command": null  
     },
 
-    "mqtt": {
-        "comment": "Connecting and communicating with the MQTT broker.",
-        "host": "192.168.1.3",
-        "port": 1883,
-        "qos": 1,
-        "retained": false,
-        "connected_topic": "Sensorlogger/status",
-        "connected_message": "online",
-        "lwt_topic": "Sensorlogger/status",
-        "lwt_message": "offline"
-    },
+    "mqtt": [
+        {
+            "comment": "Connecting and communicating with the MQTT broker.",
+            "host": "192.168.1.3",
+            "port": 1883,
+            "qos": 1,
+            "retained": false,
+            "connected_topic": "Sensorlogger/status",
+            "connected_message": "online",
+            "lwt_topic": "Sensorlogger/status",
+            "lwt_message": "offline",
+            "enable_publish": true,
+            "enable_subscribe": true,
+            "topic_domain": ""
+        }
+    ],
 
     "homematic": {
         "comment": "URL of your HomeMatic's XML API",

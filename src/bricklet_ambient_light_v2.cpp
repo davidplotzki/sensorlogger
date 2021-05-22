@@ -1,7 +1,7 @@
 /* ***********************************************************
- * This file was automatically generated on 2021-01-15.      *
+ * This file was automatically generated on 2021-05-06.      *
  *                                                           *
- * C/C++ Bindings Version 2.1.31                             *
+ * C/C++ Bindings Version 2.1.32                             *
  *                                                           *
  * If you have a bugfix for this file and want to commit it, *
  * please fix the bug in the generator. You can find a link  *

@@ -4,6 +4,7 @@
 #include "readoutbuffer.h"
 #include "tinkerforge.h"
 #include "mqttbroker.h"
+#include "mqttmanager.h"
 #include "homematic.h"
 #include "sensor.h"
 #include "sensor_json.h"
@@ -29,9 +30,9 @@ logger::logger()
 
 	_verbose = true;
 
-	_tfDaemon   = new tinkerforge(this);
-	_mqttBroker = new mqttBroker(this);
-	_homematic  = new homematic(this);
+	_tfDaemon    = new tinkerforge(this);
+	_mqttManager = new mqttManager();
+	_homematic   = new homematic(this);
 
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 	_curl = curl_easy_init();
@@ -44,14 +45,14 @@ logger::~logger()
 	for(size_t i=0; i<_sensors.size(); ++i)
 		delete _sensors.at(i);
 
+	if(_mqttManager != NULL)
+		delete _mqttManager;
+
 	if(_rBuffer != NULL)
 		delete _rBuffer;
 	
 	if(_tfDaemon != NULL)
 		delete _tfDaemon;
-
-	if(_mqttBroker != NULL)
-		delete _mqttBroker;
 
 	if(_homematic != NULL)
 		delete _homematic;
@@ -563,83 +564,141 @@ void logger::loadConfig(const std::string &configJSON)
 		// MQTT Configuration:
 		if(configFile.existAndNotNull("mqtt"))
 		{
-			if(configFile.element("mqtt")->existAndNotNull("host"))
-			{
-				try
-				{
-					std::string mqttHost = configFile.element("mqtt")->element("host")->value()->getString();
-					int mqttPort = configFile.element("mqtt")->element("port")->value()->getInt();
+			 jsonNode* mqttNode = configFile.element("mqtt");
+			 size_t nMqttBrokers = 0;
 
-					int mqttQoS = 1;
+			 if(mqttNode->existAndNotNull("host"))
+			 {
+			 	// Only one MQTT broker seems to be defined.
+			 	nMqttBrokers = 1;
+			 }
+			 else
+			 {
+			 	// This might be a JSON array that defines multiple MQTT brokers.
+			 	// Start with the first element in the supposed array.
+			 	mqttNode = configFile.element("mqtt")->element(0);
+			 	nMqttBrokers = configFile.element("mqtt")->nElements();
+			 }
+
+			 for(size_t m=0; m<nMqttBrokers; ++m)
+			 {
+				if(mqttNode->existAndNotNull("host"))
+				{
 					try
 					{
-						mqttQoS = configFile.element("mqtt")->element("qos")->value()->getInt();
+						std::string mqttHost = mqttNode->element("host")->value()->getString();
+						int mqttPort = mqttNode->element("port")->value()->getInt();
+
+						int mqttQoS = 1;
+						try
+						{
+							mqttQoS = mqttNode->element("qos")->value()->getInt();
+						}
+						catch(int e)
+						{
+							std::stringstream ss;
+							ss << "No MQTT QoS defined. Default to " << mqttQoS << ".";
+							message(ss.str(), false);
+						}
+
+						bool mqttRetained = false;
+						try
+						{
+							mqttRetained = mqttNode->element("retained")->value()->getBool();
+						}
+						catch(int e)
+						{
+							std::stringstream ss;
+							ss << "No MQTT \'retained\' setting defined. Default to false.";
+							message(ss.str(), false);
+						}
+
+						bool mqttPublishEnabled = true;
+						try
+						{
+							mqttPublishEnabled = mqttNode->element("enable_publish")->value()->getBool();
+						}
+						catch(int e)
+						{
+							
+						}
+
+						bool mqttSubscribeEnabled = true;
+						try
+						{
+							mqttSubscribeEnabled = mqttNode->element("enable_subscribe")->value()->getBool();
+						}
+						catch(int e)
+						{
+							
+						}
+
+						std::string mqtt_topic_domain;
+						std::string mqtt_connected_topic;
+						std::string mqtt_connected_payload;
+						std::string mqtt_lwt_topic;
+						std::string mqtt_lwt_payload;
+
+						try
+						{
+							mqtt_topic_domain = mqttNode->element("topic_domain")->value()->getString();
+						}
+						catch(int e) { }
+
+						try
+						{
+							mqtt_connected_topic = mqttNode->element("connected_topic")->value()->getString();
+						}
+						catch(int e) { }
+
+						try
+						{
+							mqtt_connected_payload = mqttNode->element("connected_message")->value()->getString();
+						}
+						catch(int e) { }
+
+						try
+						{
+							mqtt_lwt_topic = mqttNode->element("lwt_topic")->value()->getString();
+						}
+						catch(int e) { }
+
+						try
+						{
+							mqtt_lwt_payload = mqttNode->element("lwt_message")->value()->getString();
+						}
+						catch(int e) { }
+
+
+						if(mqttHost.size() > 0)
+						{
+							mqttBroker *b = new mqttBroker(this);
+							b->setHost(mqttHost);
+							b->setPort(mqttPort);
+							b->setQoS(mqttQoS);
+							b->setRetained(mqttRetained);
+							b->setConnectedTopic(mqtt_connected_topic);
+							b->setConnectedPayload(mqtt_connected_payload);
+							b->setLWTtopic(mqtt_lwt_topic);
+							b->setLWTpayload(mqtt_lwt_payload);
+							b->enablePublish(mqttPublishEnabled);
+							b->enableSubscribe(mqttSubscribeEnabled);
+							b->setTopicDomain(mqtt_topic_domain);
+
+							_mqttManager->addBroker(b);
+						}
 					}
 					catch(int e)
 					{
-						std::stringstream ss;
-						ss << "No MQTT QoS defined. Default to " << mqttQoS << ".";
-						message(ss.str(), false);
-					}
-
-					bool mqttRetained = false;
-					try
-					{
-						mqttRetained = configFile.element("mqtt")->element("retained")->value()->getBool();
-					}
-					catch(int e)
-					{
-						std::stringstream ss;
-						ss << "No MQTT \'retained\' setting defined. Default to false.";
-						message(ss.str(), false);
-					}
-
-					std::string mqtt_connected_topic;
-					std::string mqtt_connected_payload;
-					std::string mqtt_lwt_topic;
-					std::string mqtt_lwt_payload;
-
-					try
-					{
-						mqtt_connected_topic = configFile.element("mqtt")->element("connected_topic")->value()->getString();
-					}
-					catch(int e) { }
-
-					try
-					{
-						mqtt_connected_payload = configFile.element("mqtt")->element("connected_message")->value()->getString();
-					}
-					catch(int e) { }
-
-					try
-					{
-						mqtt_lwt_topic = configFile.element("mqtt")->element("lwt_topic")->value()->getString();
-					}
-					catch(int e) { }
-
-					try
-					{
-						mqtt_lwt_payload = configFile.element("mqtt")->element("lwt_message")->value()->getString();
-					}
-					catch(int e) { }
-
-
-					if(mqttHost.size() > 0)
-					{
-						_mqttBroker->setHost(mqttHost);
-						_mqttBroker->setPort(mqttPort);
-						_mqttBroker->setQoS(mqttQoS);
-						_mqttBroker->setRetained(mqttRetained);
-						_mqttBroker->setConnectedTopic(mqtt_connected_topic);
-						_mqttBroker->setConnectedPayload(mqtt_connected_payload);
-						_mqttBroker->setLWTtopic(mqtt_lwt_topic);
-						_mqttBroker->setLWTpayload(mqtt_lwt_payload);
+						message("Error in MQTT configuration.", true);
 					}
 				}
-				catch(int e)
-				{
-					message("Error in MQTT configuration.", true);
-				}
+
+				// Try the next array element:
+				if((m+1) < nMqttBrokers)
+					mqttNode = configFile.element("mqtt")->element(m+1);
+				else
+					break;
 			}
 		}
 	}
@@ -723,7 +782,7 @@ std::string logger::httpRequest(const std::string url)
 
 void logger::setUpConnections()
 {
-	_mqttBroker->connectToMQTTBroker();
+	_mqttManager->connectToMQTTBrokers();
 }
 
 void logger::executeSystemCommand(const std::string &command)
@@ -756,8 +815,8 @@ void logger::executeSystemCommand(const std::string &command)
 
 void logger::mqttPublish(const std::string &topic, const std::string &payload)
 {
-	if(_mqttBroker != NULL)
-		_mqttBroker->publish(topic, payload);
+	if(_mqttManager != NULL)
+		_mqttManager->publish(topic, payload);
 }
 
 void logger::homematicPublish(const std::string &iseID, const std::string &payload) const
@@ -796,7 +855,7 @@ void logger::trigger()
 	{
 		try
 		{
-			_logbooks.at(i)->write(_mqttBroker, _homematic);
+			_logbooks.at(i)->write(_mqttManager, _homematic);
 		} catch(int e)
 		{
 			std::cerr<<"Error "<<e<<" when writing logbook "<<(i+1)<<"."<<std::endl;

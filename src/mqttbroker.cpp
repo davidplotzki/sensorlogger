@@ -12,7 +12,10 @@ mqttBroker::mqttBroker(logger* root)
 	_host = "";
 	_port = 0;
 	_qos = 1;
-	_retained   = false;   // Should messaged be retained by the broker?
+	_retained          = false;   // Should messaged be retained by the broker?
+	_publish_enabled   = true;
+	_subscribe_enabled = true;
+	_topic_domain      = "";
 
 	_mqttClient = NULL;
 	_isConnected = false;
@@ -49,6 +52,51 @@ void mqttBroker::setRetained(bool retained)
 {
 	_retained = retained;
 	_lwt.set_retained(_retained);
+}
+
+void mqttBroker::enablePublish(bool enabled)
+{
+	_publish_enabled = enabled;
+}
+
+void mqttBroker::enableSubscribe(bool enabled)
+{
+	_subscribe_enabled = enabled;
+}
+
+void mqttBroker::setTopicDomain(const std::string& topic_domain)
+{
+	_topic_domain = topic_domain;
+}
+
+bool mqttBroker::isValidTopic(const std::string& topic) const
+{
+	if(_topic_domain.size() > 0)
+	{
+		if(_topic_domain.size() > topic.size())
+		{
+			return false;
+		}
+		else
+		{
+			// Does topic start with domain topic?
+			if(topic.substr(0, _topic_domain.size()) == _topic_domain)
+			{
+				return true;
+			}
+			else
+			{
+				return false;
+			}
+		}
+	}
+	else
+	{
+		// all topics are valid
+		return true;
+	}
+
+	return false;
 }
 
 void mqttBroker::setQoS(int qos)
@@ -147,21 +195,29 @@ void mqttBroker::connected(const std::string& cause)
 	_isConnected = true;
 
 	if(!_connected_topic.empty())
-		publish(_connected_topic, _connected_payload);
+		publish(_connected_topic, _connected_payload, true);
 
-	for(size_t i=0; i<_root->nSensors(); ++i)
+
+	// Subscribe to topics:
+	if(_subscribe_enabled)
 	{
-		try
+		for(size_t i=0; i<_root->nSensors(); ++i)
 		{
-			sensor* s = _root->getSensor(i);
-			if(s->type() == sensor_mqtt)
+			try
 			{
-				sensorMQTT *smqtt = dynamic_cast<sensorMQTT*>(s);
-				std::string subscribeTopic = smqtt->getMQTTSubscribeTopic();
+				sensor* s = _root->getSensor(i);
+				if(s->type() == sensor_mqtt)
+				{
+					sensorMQTT *smqtt = dynamic_cast<sensorMQTT*>(s);
+					std::string subscribeTopic = smqtt->getMQTTSubscribeTopic();
 
-				_mqttClient->subscribe(subscribeTopic, _qos, nullptr, *smqtt);
-			}
-		} catch(int e) {}
+					if(isValidTopic(subscribeTopic))
+					{
+						_mqttClient->subscribe(subscribeTopic, _qos, nullptr, *smqtt);
+					}
+				}
+			} catch(int e) {}
+		}
 	}
 }
 
@@ -185,14 +241,14 @@ void mqttBroker::connection_lost(const std::string& cause)
 // Callback for when a message arrives.
 void mqttBroker::message_arrived(mqtt::const_message_ptr msg)
 {
+	std::string topic = msg->get_topic();
+	std::string payload = msg->to_string();
+
 	for(size_t i=0; i<_root->nSensors(); ++i)
 	{
 		sensor* s = _root->getSensor(i);
 		if(s->type() == sensor_mqtt)
 		{
-			std::string topic = msg->get_topic();
-			std::string payload = msg->to_string();
-
 			sensorMQTT* smqtt = dynamic_cast<sensorMQTT*>(s);
 
 			if(topic == smqtt->getMQTTSubscribeTopic())
@@ -290,10 +346,16 @@ void mqttBroker::connectToMQTTBroker()
 	}
 }
 
-void mqttBroker::publish(const std::string &topic, const std::string &payload)
+void mqttBroker::publish(const std::string &topic, const std::string &payload, bool enforce)
 {
-	if(_isConnected)
+	if(_publish_enabled || enforce)
 	{
-		_mqttClient->publish(topic, payload.c_str(), payload.size(), _qos, _retained);
+		if(_isConnected)
+		{
+			if(isValidTopic(topic) || enforce)
+			{
+				_mqttClient->publish(topic, payload.c_str(), payload.size(), _qos, _retained);
+			}
+		}
 	}
 }

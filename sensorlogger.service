@@ -8,7 +8,7 @@ Description=Sensorlogger
 
 [Service]
 WorkingDirectory=/home/username
-ExecStart=/home/username/sensorlogger
+ExecStart=/home/username/sensorlogger /home/username/config.json
 User=username
 Group=users
 

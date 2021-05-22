@@ -1,8 +1,8 @@
 #ifndef _SENSORLOGGER_H
 #define _SENSORLOGGER H
 
-#define SENSORLOGGER_VERSION "1.0.1"
-#define SENSORLOGGER_VERSION_DATE "2021-02-08"
+#define SENSORLOGGER_VERSION "1.1"
+#define SENSORLOGGER_VERSION_DATE "2021-05-22"
 
 // Logbook and measurement defaults:
 #define DEFAULT_CYCLETIME            900000  // 15 minutes

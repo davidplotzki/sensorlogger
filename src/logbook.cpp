@@ -4,7 +4,7 @@
 #include "measurements.h" 
 #include "counter.h"
 #include "logger.h"
-#include "mqttbroker.h"
+#include "mqttmanager.h"
 #include "homematic.h"
 #include "sensor.h"
 
@@ -102,7 +102,7 @@ void logbook::setTimestampForNextLogEntry()
 }
 
 
-void logbook::write(mqttBroker* broker, homematic* hm)
+void logbook::write(mqttManager* brokers, homematic* hm)
 {
 	uint64_t currentTimestamp = _root->currentTimestamp();
 
@@ -132,7 +132,7 @@ void logbook::write(mqttBroker* broker, homematic* hm)
 				{
 					try
 					{
-						broker->publish(_cols.at(i)->getMQTTPublishTopic(), colValue);
+						brokers->publish(_cols.at(i)->getMQTTPublishTopic(), colValue);
 					}
 					catch(int e)
 					{

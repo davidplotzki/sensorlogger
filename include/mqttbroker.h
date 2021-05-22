@@ -13,6 +13,9 @@ private:
 	unsigned    _port;
 	int         _qos;
 	bool        _retained;  // Should messaged be retained by the broker?
+	bool        _publish_enabled;
+	bool        _subscribe_enabled;
+	std::string _topic_domain;
 	
 	std::string _connected_topic;
 	std::string _connected_payload;
@@ -33,6 +36,8 @@ private:
 	void generateClientID();
 	void reconnect();
 
+	bool isValidTopic(const std::string& topic) const;
+
 	// MQTT callbacks:
 	void on_failure(const mqtt::token& tok) override;
 	void on_success(const mqtt::token& tok) override;
@@ -49,6 +54,9 @@ public:
 	void setPort(unsigned port);
 	void setQoS(int qos);
 	void setRetained(bool retained);
+	void enablePublish(bool enabled);
+	void enableSubscribe(bool enabled);
+	void setTopicDomain(const std::string& topic_domain);
 	void setLWTtopic(const std::string& lwttopic);
 	void setLWTpayload(const std::string& lwtpayload);
 	void setConnectedTopic(const std::string& connectedtopic);
@@ -60,7 +68,7 @@ public:
 	bool        doRetain() const;
 
 	void connectToMQTTBroker();
-	void publish(const std::string &topic, const std::string &payload);
+	void publish(const std::string &topic, const std::string &payload, bool enforce);
 };
 
 #endif

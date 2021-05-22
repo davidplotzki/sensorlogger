@@ -18,6 +18,7 @@
 class readoutBuffer;
 class tinkerforge;
 class mqttBroker;
+class mqttManager;
 class homematic;
 class sensor;
 class logbook;
@@ -41,7 +42,7 @@ private:
 	std::vector<logbook*> _logbooks;
 
 	tinkerforge* _tfDaemon;
-	mqttBroker* _mqttBroker;
+	mqttManager* _mqttManager;
 	homematic* _homematic;
 
 	CURL* _curl;

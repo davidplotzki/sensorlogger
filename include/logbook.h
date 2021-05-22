@@ -13,7 +13,7 @@
 
 class sensor;
 class counter;
-class mqttBroker;
+class mqttManager;
 class homematic;
 class logbook;
 class logger;
@@ -53,7 +53,7 @@ public:
 	void setTimestampForNextLogEntry();
 
 	// Writes to file and possibly publishes column values to MQTT broker.
-	void write(mqttBroker* broker, homematic* hm);
+	void write(mqttManager* brokers, homematic* hm);
 };
 
 #endif

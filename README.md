@@ -1,11 +1,11 @@
 # Sensorlogger
 Visit the [Sensorlogger website](https://tastyorange.de/projects/sensorlogger.htm) for a more structured documentation. (Auch auf [Deutsch](https://tastyorange.de/projekte/sensorlogger.htm) verfügbar.)
 
-Sensorlogger reads sensor data and creates statistical reports in logbook tables. It can redistribute incoming sensor values, but also statistical summary data, to an MQTT broker or to a HomeMatic CCU. Its original purpose was to serve as a logger for a weather station equipped with Tinkerforge sensors, where data has to be averaged and logged every 15 minutes. However, Sensorlogger is very flexible and can be configured to serve many more purposes.
+Sensorlogger reads sensor data and creates statistical reports in logbook tables. It can redistribute incoming sensor values, but also statistical summary data, to multiple MQTT brokers or to a HomeMatic CCU. Its original purpose was to serve as a logger for a weather station equipped with Tinkerforge sensors, where data has to be averaged and logged every 15 minutes. However, Sensorlogger is very flexible and can be configured to serve many other purposes.
 
 ![Concept illustration](concept.svg)
 
-Supported data sources are (selected) [Tinkerforge](https://www.tinkerforge.com) sensors and JSON structures that can be read via HTTP(s) or from local files. Additionally, you can subscribe to topics broadcast by an MQTT broker and read the values of system variables from a HomeMatic CCU. The values received by MQTT may also be embedded in their own JSON structures.
+Supported data sources are (selected) [Tinkerforge](https://www.tinkerforge.com) sensors and JSON structures that can be read via HTTP(s) or from local files. Additionally, you can subscribe to topics that are broadcast by MQTT brokers and read the values of system variables from a HomeMatic CCU. The values received via MQTT may also be embedded in their own JSON structures.
 
 In the following listing you see a very simple example for a logbook file. It keeps track of the mean outside temperature and humidity every 30 minutes.
 
@@ -21,11 +21,11 @@ In the following listing you see a very simple example for a logbook file. It ke
 
 ## Data accumu­lation and statisti­cal summary
 
-Sensorlogger is able to read values from Tinkerforge sensors and JSON structures in user-defined **time intervals.** After reading, these values can be forwarded immediately to an MQTT broker or HomeMatic CCU (the XML-API is used to set system variables using their ISE-ID). The values are also stored internally until they become irrelevant for any further statistical analysis.
+Sensorlogger is able to read values from Tinkerforge sensors and JSON structures in user-defined **time intervals.** After reading, these values can be forwarded immediately to MQTT brokers or to a HomeMatic CCU (the XML-API is used to set system variables using their ISE-ID). The values are also stored internally until they become irrelevant for any further statistical analysis.
 
 Data can also be received via **interrupts,** for example from Tinkerforge IO bricklets or via subscriptions to MQTT topics.
 
-Optionally, collected data can undergo **statistical processing.** Currently, Sensorlogger can calculate mean, median, sum, minimum, maximum, frequencies, counts and standard deviations. These are calculated for **logbook** columns that users can set up to their own liking in the configuration file. The statistical summary of a measurement cycle is then periodically written to a logbook file and/or broadcast to the MQTT broker or HomeMatic CCU.
+Optionally, collected data can undergo **statistical processing.** Currently, Sensorlogger can calculate mean, median, sum, minimum, maximum, frequencies, counts and standard deviations. These are calculated for **logbook** columns that users can set up to their own liking in the configuration file. The statistical summary of a measurement cycle is then periodically written to a logbook file and/or broadcast to the MQTT brokers or a HomeMatic CCU.
 
 ## Software requirements
 
@@ -87,7 +87,7 @@ If you don’t provide the path to a configuration file, Sensorlogger will look 
 
 ### Sensorlogger as a service
 
-It is recommended to run Sensorlogger with restricted privileges. The setup procedure for an automatic startup at boot time depends on the distribution. For Debian/Raspbian, I use a service file for systemd like the one shown below. It assumes that the executable file named `sensorlogger` is located in the user’s home directory at `/home/username`. I would also use this directory to store the logging information.
+It is recommended to run Sensorlogger with restricted privileges. The setup procedure for an automatic startup at boot time depends on the distribution. For Debian/Raspbian, I use a service file for systemd like the one shown below. It assumes that the executable file named `sensorlogger` is located in the user’s home directory at `/home/username`. The configuration file called `config.json` is also located there in this example.
 
 	# /etc/systemd/system/sensorlogger.service
 	# ------------------------------------------
@@ -99,7 +99,7 @@ It is recommended to run Sensorlogger with restricted privileges. The setup proc
 	
 	[Service]
 	WorkingDirectory=/home/username
-	ExecStart=/home/username/sensorlogger
+	ExecStart=/home/username/sensorlogger /home/username/config.json
 	User=username
 	Group=users
 	
@@ -118,7 +118,7 @@ Further below, you will find a complete example configuration. Any Sensorlogger 
 
 + `general` is meant for general settings and remarks (you can add your own). Currently, it only specifies the global event log file for errors and warnings.
 + `tinkerforge` contains the parameters for the connection to the Brick Daemon.
-+ `mqtt` contains the parameters for the connection to the MQTT broker.
++ `mqtt` contains the parameters for connections to MQTT brokers.
 + `homematic` contains the parameters for the connection to the XML-API of a HomeMatic CCU.
 + `sensors` contains a description of all sensors from which data should be read. This is a JSON array that can contain an arbitrary number of sensor definition objects.
 + `logbooks` defines logbook files and associated `columns`. It is also a JSON array that can contain an arbitrary number of logbook definitions and their proper columns.
@@ -167,17 +167,22 @@ Shown below is an example configuration file for the following scenario.
         "system_restart_command": null  
     },
 
-    "mqtt": {
-        "comment": "Connecting and communicating with the MQTT broker.",
-        "host": "192.168.1.3",
-        "port": 1883,
-        "qos": 1,
-        "retained": false,
-        "connected_topic": "Sensorlogger/status",
-        "connected_message": "online",
-        "lwt_topic": "Sensorlogger/status",
-        "lwt_message": "offline"
-    },
+    "mqtt": [
+        {
+            "comment": "Connecting and communicating with the MQTT broker.",
+            "host": "192.168.1.3",
+            "port": 1883,
+            "qos": 1,
+            "retained": false,
+            "connected_topic": "Sensorlogger/status",
+            "connected_message": "online",
+            "lwt_topic": "Sensorlogger/status",
+            "lwt_message": "offline",
+            "enable_publish": true,
+            "enable_subscribe": true,
+            "topic_domain": ""
+        }
+    ],
 
     "homematic": {
         "comment": "URL of your HomeMatic's XML API",
@@ -318,7 +323,7 @@ Shown below is an example configuration file for the following scenario.
 
 ## Tinkerforge settings
 
-Currently, version 2.1.31 (2021-01-15) of the [Tinkerforge](https://www.tinkerforge.com/) C/C++ bindings are used. The following Tinkerforge Bricklets are supported. The table also lists the channel IDs if a Bricklet supports different types of measurements.
+Currently, version 2.1.32 (2021-05-06) of the [Tinkerforge](https://www.tinkerforge.com/) C/C++ bindings are used. The following Tinkerforge Bricklets are supported. The table also lists the channel IDs if a Bricklet supports different types of measurements.
 
 | Sensor                         | Channels                                          |
 | ------------------------------ | ------------------------------------------------- |
@@ -580,19 +585,39 @@ Only Tinkerforge IO Bricklets are currently supported as external triggers.
 
 ## MQTT settings
 
-The general `mqtt` section is used to configure the connection parameters to the MQTT broker.
+The general `mqtt` section is used to configure the parameters for the connections to the MQTT brokers. Any number of MQTT brokers can be set up. The following example shows a configuration for two separate brokers.
 
 ```
-"mqtt": {
-    "host": "localhost",
-    "port": 1883,
-    "qos": 1,
-    "retained": false,
-    "connected_topic": "Sensorlogger/status",
-    "connected_message": "online",
-    "lwt_topic": "Sensorlogger/status",
-    "lwt_message": "offline"
-}
+"mqtt": [
+    {
+        "comment": "Configuration for Broker #1",
+        "host": "192.168.1.3",
+        "port": 1883,
+        "qos": 1,
+        "retained": false,
+        "connected_topic": "Sensorlogger/status",
+        "connected_message": "online",
+        "lwt_topic": "Sensorlogger/status",
+        "lwt_message": "offline",
+        "enable_publish": true,
+        "enable_subscribe": false,
+        "topic_domain": ""
+    },
+    {
+        "comment": "Configuration for Broker #2",
+        "host": "192.168.1.8",
+        "port": 1883,
+        "qos": 1,
+        "retained": false,
+        "connected_topic": "Sensorlogger/status",
+        "connected_message": "online",
+        "lwt_topic": "Sensorlogger/status",
+        "lwt_message": "offline",
+        "enable_publish": false,
+        "enable_subscribe": true,
+        "topic_domain": "House/Living_Room"
+    }
+]
 ```
 
 + `"host":` Hostname or IP address where the MQTT broker can be reached. May be omitted or set to `null` if you don’t want to configure any MQTT connection.
@@ -624,6 +649,18 @@ The general `mqtt` section is used to configure the connection parameters to the
 + `"lwt_message":` Message for the *Last Will & Testament (LWT)* that the MQTT broker will broadcast if the connection to Sensorlogger is lost.
 
     Standard value: `null`
+
++ `"topic_domain":` Can be used to restrict this broker to a certain set of topics. All topics that this broker handles must start with this string. This parameter can be used as a filter mask when multiple MQTT brokers are defined. If the broker should handle all topics, an empty string can be used.
+
+    Standard value: `""`
+
++ `"enable_publish":` If set to `true`, all values that belong to the topic domain will be published to this MQTT broker. Can be set to `false` to disable publishing to this broker. The connected and LWT messages will be sent to the broker regardless of this parameter.
+
+    Standard value: `true`
+
++ `"enable_subscribe":` If set to `true`, this MQTT broker will be used to subscribe to topics that belong to its topic domain. Can be set to `false` to disable any subscriptions for this broker.
+
+    Standard value: `true`
 
 ### MQTT sensors
 
@@ -676,7 +713,7 @@ The general `mqtt` section is used to configure the connection parameters to the
 
     Standard value: `false`
 
-+ `"mqtt_publish":` Topic that is used to republish the received and possibly corrected sensor value via MQTT.
++ `"mqtt_publish":` Topic that is used to republish the received and possibly corrected sensor value via MQTT. Cannot be the same topic as `mqtt_subscribe`.
 
     Standard value: `null`
 
@@ -851,7 +888,9 @@ The `logbooks` key in the configuration file is always a JSON array that may con
 ]
 ```
 
-+ `"filename":` Specifies the path and filename where the logbook shall be saved. If set to `null`, the logbook will not be saved as a real file, but statistics will still be forwarded to an MQTT broker or HomeMatic CCU, if intended.
++ `"filename":` Specifies the path and filename where the logbook shall be saved. If set to `null`, the logbook will not be saved as a real file, but statistics will still be published via MQTT or sent to the HomeMatic CCU, if intended.
+
+    Standard value: `null`
 
 + `"cycle_time":` Duration of a measurement cycle. Please note that the cycle time should be well above the rest period (polling intervals) of the individual sensors in order to accumulate some values for the statistics to make sense. The numerical part for this parameter is set under `"value"`, its unit under `"unit"`. The following units are allowed: `"ms"`, `"s"`, `"min"`, `"h"`, `"d"`.
 
