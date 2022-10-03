@@ -1,6 +1,8 @@
 #ifndef _SENSOR_TINKERFORGE_H
 #define _SENSOR_TINKERFORGE_H
 
+#ifdef OPTION_TINKERFORGE
+
 #include "sensor.h"
 #include "tinkerforge.h"
 
@@ -22,7 +24,7 @@ private:
 	tinkerforge_callback* _tinkerforgeCallback;
 
 public:
-	sensorTinkerforge(logger* root, const std::string &sensorID, const std::string &mqttPublishTopic, const std::string &homematicPublishISE, tinkerforge* tinkerManager, const std::string uid, trigger_event triggerEvent, bool isCounter, uint8_t channel, char ioPort, uint32_t debounceTime, double factor, double offset, uint64_t minimumRestPeriod);
+	sensorTinkerforge(logger* root, const std::string &sensorID, const std::string &mqttPublishTopic, const std::string &homematicPublishISE, tinkerforge* tinkerManager, const std::string uid, trigger_event triggerEvent, bool isCounter, uint8_t channel, char ioPort, uint32_t debounceTime, double factor, double offset, uint64_t minimumRestPeriod, uint64_t retryTime);
 
 	~sensorTinkerforge();
 	
@@ -49,4 +51,5 @@ public:
 };
 
 
+#endif
 #endif

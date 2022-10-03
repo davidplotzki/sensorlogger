@@ -12,7 +12,7 @@ private:
 	homematic* _homematic;
 
 public:
-	sensorHomematic(logger* root, homematic* hmPtr, const std::string &sensorID, const std::string &mqttPublishTopic, const std::string &homematicPublishISE, const std::string &homematicSubscribeISE, bool isCounter, double factor, double offset, uint64_t minimumRestPeriod);
+	sensorHomematic(logger* root, homematic* hmPtr, const std::string &sensorID, const std::string &mqttPublishTopic, const std::string &homematicPublishISE, const std::string &homematicSubscribeISE, bool isCounter, double factor, double offset, uint64_t minimumRestPeriod, uint64_t retryTime);
 
 	sensor_type type() const;
 	std::string getISE();

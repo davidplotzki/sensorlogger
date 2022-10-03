@@ -5,7 +5,7 @@
 #include "logger.h"
 #include "measurements.h"
 
-sensorJSON::sensorJSON(logger* root, const std::string &sensorID, const std::string &mqttPublishTopic, const std::string &homematicPublishISE, const std::string &jsonFile, const std::vector<std::string>* jsonKeys, bool isCounter, double factor, double offset, uint64_t minimumRestPeriod, readoutBuffer* buffer)
+sensorJSON::sensorJSON(logger* root, const std::string &sensorID, const std::string &mqttPublishTopic, const std::string &homematicPublishISE, const std::string &jsonFile, const std::vector<std::string>* jsonKeys, bool isCounter, double factor, double offset, uint64_t minimumRestPeriod, uint64_t retryTime, readoutBuffer* buffer)
 {
 	setPointerToLogger(root);
 	setSensorID(sensorID);
@@ -15,6 +15,7 @@ sensorJSON::sensorJSON(logger* root, const std::string &sensorID, const std::str
 	setOffset(offset);
 	setCounter(isCounter);
 	setMinimumRestPeriod(minimumRestPeriod);
+	setRetryTime(retryTime);
 	setMQTTPublishTopic(mqttPublishTopic);
 	setHomematicPublishISE(homematicPublishISE);
 
@@ -57,9 +58,8 @@ bool sensorJSON::measure(uint64_t currentTimestamp)
 		}
 		catch(int e)
 		{
-			_timestamp_lastMeasurement = currentTimestamp;
 			addReadFailure();
-			_root->message("Error reading sensor: " + _sensorID, true);
+			_root->error("Cannot read JSON sensor: " + _sensorID);
 		}
 	}
 

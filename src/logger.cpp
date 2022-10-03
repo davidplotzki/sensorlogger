@@ -29,13 +29,23 @@ logger::logger()
 	_brickd_restart_attempt_counter = 0;
 
 	_verbose = true;
+	_logLevel = loglevel_info;
 
-	_tfDaemon    = new tinkerforge(this);
+	_default_rest_period = DEFAULT_MEASUREMENT_INTERVAL;
+	_default_retry_time  = DEFAULT_RETRY_TIME;
+
+	#ifdef OPTION_TINKERFORGE
+		_tfDaemon    = new tinkerforge(this);
+	#endif
+
 	_mqttManager = new mqttManager();
 	_homematic   = new homematic(this);
 
-	curl_global_init(CURL_GLOBAL_DEFAULT);
-	_curl = curl_easy_init();
+	#ifdef OPTION_CURL
+		curl_global_init(CURL_GLOBAL_DEFAULT);
+		_curl = curl_easy_init();
+	#endif
+	_http_timeout = DEFAULT_HTTP_TIMEOUT;
 
 	_rBuffer = new readoutBuffer(this);
 }
@@ -51,23 +61,59 @@ logger::~logger()
 	if(_rBuffer != NULL)
 		delete _rBuffer;
 	
-	if(_tfDaemon != NULL)
-		delete _tfDaemon;
+	#ifdef OPTION_TINKERFORGE
+		if(_tfDaemon != NULL)
+			delete _tfDaemon;
+	#endif
 
 	if(_homematic != NULL)
 		delete _homematic;
 
-	if(_curl)
-		curl_easy_cleanup(_curl);
+	#ifdef OPTION_CURL
+		if(_curl)
+			curl_easy_cleanup(_curl);
 
-	curl_global_cleanup();
+		curl_global_cleanup();
+	#endif
+}
+
+void logger::debug(const std::string &debug_message)
+{
+	if(_logLevel <= loglevel_debug)
+	{
+		message("Debug: " + debug_message, false);
+	}
+}
+
+void logger::info(const std::string &info_message)
+{
+	if(_logLevel <= loglevel_info)
+	{
+		message(info_message, false);
+	}
+}
+
+void logger::warning(const std::string &warning_message)
+{
+	if(_logLevel <= loglevel_warning)
+	{
+		message("Warning: " + warning_message, false);
+	}
+}
+
+void logger::error(const std::string &error_message)
+{
+	if(_logLevel <= loglevel_error)
+	{
+		message("ERROR: " + error_message, true);
+	}
 }
 
 void logger::message(const std::string &m, bool isError)
 {
 	if(m != _lastLogfileMessage)
 	{
-		_lastLogfileMessage = m;
+		_lastLogfileMessage = ""; //m;
 
 		if(_verbose)
 		{
@@ -89,7 +135,7 @@ void logger::message(const std::string &m, bool isError)
 			int month   = timeinfo->tm_mon + 1;
 			int hour    = timeinfo->tm_hour;
 			int minute 	= timeinfo->tm_min;
-			int second = timeinfo->tm_sec;
+			int second  = timeinfo->tm_sec;
 
 			std::ofstream outfile;
 			outfile.open(_logFilename, std::ios_base::app);
@@ -110,6 +156,19 @@ void logger::message(const std::string &m, bool isError)
 			}			
 		}
 	}
+}
+
+std::string logger::logLevelString()
+{
+	switch(_logLevel)
+	{
+		case(loglevel_debug): return "debug"; break;
+		case(loglevel_info): return "info"; break;
+		case(loglevel_warning): return "warning"; break;
+		case(loglevel_error): return "error"; break;
+	}
+
+	return "unknown";
 }
 
 void logger::welcomeMessage(const std::string &configJSON)
@@ -136,8 +195,57 @@ void logger::loadConfig(const std::string &configJSON)
 			_logFilename = "";
 			welcomeMessage(configJSON);
 			
-			message("No logfile given under general/logfile. Logging into file is disabled.", false);
+			info("No logfile given under general/logfile. Logging into file is disabled.");
 		}
+
+		try	{
+			std::string json_loglevel = configFile.element("general")->element("loglevel")->value()->getString();
+
+			if(json_loglevel == "debug")
+			{
+				_logLevel = loglevel_debug;
+			}
+			else if (json_loglevel == "info")
+			{
+				_logLevel = loglevel_info;
+			}
+			else if (json_loglevel == "warning")
+			{
+				_logLevel = loglevel_warning;
+			}
+			else if (json_loglevel == "error")
+			{
+				_logLevel = loglevel_error;
+			}
+		}
+		catch(int e) {
+			debug("loglevel not found in config file.");
+		}
+		debug("Log Level: " + logLevelString());
+
+		try	{
+			_http_timeout = static_cast<long>(configFile.element("general")->element("http_timeout")->value()->getInt());
+		}
+		catch(int e) {
+			_http_timeout = DEFAULT_HTTP_TIMEOUT;
+		}
+		debug("HTTP Timeout: " + std::to_string(_http_timeout) + " s");
+
+		try	{
+			_default_rest_period = configFile.element("general")->element("default_rest_period")->durationInMS();
+		}
+		catch(int e) {
+			_default_rest_period = DEFAULT_MEASUREMENT_INTERVAL;
+		}
+		debug("Default rest period: " + std::to_string(_default_rest_period) + " ms");
+
+		try	{
+			_default_retry_time = configFile.element("general")->element("default_retry_time")->durationInMS();
+		}
+		catch(int e) {
+			_default_retry_time = DEFAULT_RETRY_TIME;
+		}
+		debug("Default retry time: " + std::to_string(_default_retry_time) + " ms");
 
 		// Homematic configuration
 		if(configFile.existAndNotNull("homematic"))
@@ -149,45 +257,59 @@ void logger::loadConfig(const std::string &configJSON)
 				} catch(int e) { }
 			}
 		}
+		debug("Homematic xmlapi_url: " + _homematic->getXMLAPI_URL());
 
 		// Tinkerforge configuration
 		if(configFile.existAndNotNull("tinkerforge"))
 		{
 			if(configFile.element("tinkerforge")->existAndNotNull("host"))
 			{
-				try {
-					_tfDaemon->setHost(configFile.element("tinkerforge")->element("host")->value()->getString());
-				} catch(int e) { }
+				#ifdef OPTION_TINKERFORGE
+					try {
+						_tfDaemon->setHost(configFile.element("tinkerforge")->element("host")->value()->getString());
+					} catch(int e) { }
 
-				try {
-					_tfDaemon->setPort(static_cast<unsigned short>(configFile.element("tinkerforge")->element("port")->value()->getInt()));
-				} catch(int e) { }
+					try {
+						_tfDaemon->setPort(static_cast<unsigned short>(configFile.element("tinkerforge")->element("port")->value()->getInt()));
+					} catch(int e) { }
+				#else
+					error("Cannot set up Tinkerforge connection. This version of Sensorlogger was compiled without Tinkerforge support.");
+				#endif
 			}
 		}
 
-		try {
-			_max_tinkerforge_read_failures = configFile.element("tinkerforge")->element("max_bricklet_read_failures")->value()->getInt();
-		} catch(int e) {
-			_max_tinkerforge_read_failures = DEFAULT_MAX_BRICKLET_READ_FAILURES;
-		}
+		#ifdef OPTION_TINKERFORGE
+			debug("Tinkerforge Host: " + _tfDaemon->getHost());
+			debug("Tinkerforge Port: " + std::to_string(_tfDaemon->getPort()));
 
-		try {
-			_max_brickd_restart_attempts = configFile.element("tinkerforge")->element("max_brickd_restart_attempts")->value()->getInt();
-		} catch(int e) {
-			_max_brickd_restart_attempts = DEFAULT_MAX_BRICKD_RESTART_ATTEMPTS;
-		}
+			try {
+				_max_tinkerforge_read_failures = configFile.element("tinkerforge")->element("max_bricklet_read_failures")->value()->getInt();
+			} catch(int e) {
+				_max_tinkerforge_read_failures = DEFAULT_MAX_BRICKLET_READ_FAILURES;
+			}
+			debug("Tinkerforge max_bricklet_read_failures: " + std::to_string(_max_tinkerforge_read_failures));
 
-		try {
-			_cmd_readFailures = configFile.element("tinkerforge")->element("brickd_restart_command")->value()->getString();
-		} catch(int e) {
-			_cmd_readFailures = "";
-		}
+			try {
+				_max_brickd_restart_attempts = configFile.element("tinkerforge")->element("max_brickd_restart_attempts")->value()->getInt();
+			} catch(int e) {
+				_max_brickd_restart_attempts = DEFAULT_MAX_BRICKD_RESTART_ATTEMPTS;
+			}
+			debug("Tinkerforge max_brickd_restart_attempts: " + std::to_string(_max_brickd_restart_attempts));
 
-		try {
-			_cmd_readFailures_critical = configFile.element("tinkerforge")->element("system_restart_command")->value()->getString();
-		} catch(int e) {
-			_cmd_readFailures_critical = "";
-		}
+			try {
+				_cmd_readFailures = configFile.element("tinkerforge")->element("brickd_restart_command")->value()->getString();
+			} catch(int e) {
+				_cmd_readFailures = "";
+			}
+			debug("Tinkerforge brickd_restart_command: " + _cmd_readFailures);
+
+			try {
+				_cmd_readFailures_critical = configFile.element("tinkerforge")->element("system_restart_command")->value()->getString();
+			} catch(int e) {
+				_cmd_readFailures_critical = "";
+			}
+			debug("Tinkerforge system_restart_command: " + _cmd_readFailures_critical);
+		#endif
 
 
 		// Sensor configuration
@@ -212,22 +334,26 @@ void logger::loadConfig(const std::string &configJSON)
 						std::string homematicSubscribeISE = "";
 
 						std::string tinkerforge_uid;
-						uint8_t channel = 0;
-						char ioPort = 'a';
+						#ifdef OPTION_TINKERFORGE
+							uint8_t channel = 0;
+							char ioPort = 'a';
+							trigger_event triggerEvent = periodic;
+							uint32_t io_debounce_ms = DEFAULT_DEBOUNCE_TIME;
+						#endif
+
 						bool isCounter = false;
-						trigger_event triggerEvent = periodic;
-						uint32_t io_debounce_ms = DEFAULT_DEBOUNCE_TIME;
 
 						double sensorFactor = 1.0;
 						double sensorOffset = 0.0;
-						uint64_t sensorMinimumRestPeriod = DEFAULT_MEASUREMENT_INTERVAL;
+						uint64_t sensorMinimumRestPeriod = _default_rest_period;
+						uint64_t sensorRetryTime = _default_retry_time;
 
 						try {
 							sensorID = s->element("sensor_id")->value()->getString();
 						} catch(int e) {
 							std::stringstream ss;
 							ss << "Sensor #" << (i+1) <<": sensor_id not found in config file.";
-							message(ss.str(), true);
+							error(ss.str());
 							continue;
 						}
 
@@ -271,55 +397,57 @@ void logger::loadConfig(const std::string &configJSON)
 							tinkerforge_uid = s->element("tinkerforge_uid")->value()->getString();
 						} catch(int e) {}
 
-						try {
-							channel = static_cast<uint8_t>(s->element("channel")->value()->getInt());
-						} catch(int e) {}
+						#ifdef OPTION_TINKERFORGE
+							try {
+								channel = static_cast<uint8_t>(s->element("channel")->value()->getInt());
+							} catch(int e) {}
 
-						try {
-							std::string sioPort = s->element("io_port")->value()->getString();
-							if(sioPort.size() == 1)
-							{
-								ioPort = sioPort.at(0);
-								if(!(ioPort == 'A' || ioPort == 'a' || ioPort == 'B' || ioPort == 'b'))
+							try {
+								std::string sioPort = s->element("io_port")->value()->getString();
+								if(sioPort.size() == 1)
+								{
+									ioPort = sioPort.at(0);
+									if(!(ioPort == 'A' || ioPort == 'a' || ioPort == 'B' || ioPort == 'b'))
+									{
+										std::stringstream ss;
+										ss << "Not a valid io_port : \'" << sioPort <<"\'. The io_port for an IO Bricklet must be either \'a\' or \'b\'. Default to \'a\'.";
+										error(ss.str());
+										ioPort = 'a';
+									}
+								}
+								else
 								{
 									std::stringstream ss;
-									ss << "Error: Not a valid io_port : \'" << sioPort <<"\'. The io_port for an IO Bricklet must be either \'a\' or \'b\'. Default to \'a\'.";
-									message(ss.str(), true);
-									ioPort = 'a';
+									ss << "Not a valid io_port : \'" << sioPort <<"\'. The io_port for an IO Bricklet must be either \'a\' or \'b\'. Default to \'a\'.";
+									error(ss.str());
 								}
-							}
-							else
-							{
-								std::stringstream ss;
-								ss << "Error: Not a valid io_port : \'" << sioPort <<"\'. The io_port for an IO Bricklet must be either \'a\' or \'b\'. Default to \'a\'.";
-								message(ss.str(), true);
-							}
-						} catch(int e) {}
+							} catch(int e) {}
+
+							try {
+								std::string triggerText = s->element("trigger")->value()->getString();
+								if(triggerText == "periodic")
+									triggerEvent = periodic;
+								else if(triggerText == "high")
+									triggerEvent = high;
+								else if(triggerText == "low")
+									triggerEvent = low;
+								else if(triggerText == "high_or_low")
+									triggerEvent = high_or_low;
+								else if(triggerText == "high_and_low")
+									triggerEvent = high_or_low;
+								else
+								{
+									error("Unknown trigger type: \'"+triggerText+"\'");
+								}
+							} catch(int e) {}
+
+							try {
+								io_debounce_ms = static_cast<uint32_t>(s->element("io_debounce")->durationInMS());
+							} catch(int e) {}
+						#endif
 
 						try {
 							isCounter = s->element("counter")->value()->getBool();
-						} catch(int e) {}
-
-						try {
-							std::string triggerText = s->element("trigger")->value()->getString();
-							if(triggerText == "periodic")
-								triggerEvent = periodic;
-							else if(triggerText == "high")
-								triggerEvent = high;
-							else if(triggerText == "low")
-								triggerEvent = low;
-							else if(triggerText == "high_or_low")
-								triggerEvent = high_or_low;
-							else if(triggerText == "high_and_low")
-								triggerEvent = high_or_low;
-							else
-							{
-								message("Error: Unknown trigger type: \'"+triggerText+"\'", true);
-							}
-						} catch(int e) {}
-
-						try {
-							io_debounce_ms = static_cast<uint32_t>(s->element("io_debounce")->durationInMS());
 						} catch(int e) {}
 
 						try {
@@ -339,30 +467,43 @@ void logger::loadConfig(const std::string &configJSON)
 							{
 								std::stringstream ss;
 								ss << "Sensor " << (i+1) << " (" << sensorID << ") has no valid minimum rest period. Default to " << sensorMinimumRestPeriod << "ms.";
-								message(ss.str(), false);
+								warning(ss.str());
 							}
 						}
 
-
+						try {
+							sensorRetryTime = s->element("retry_time")->durationInMS();
+						}
+						catch(int e)
+						{
+						}
 
 						if(sensorJSONfile.size() > 0)  // Create a JSON sensor
 						{
-							sensorJSON* jsonSensor = new sensorJSON(this, sensorID, mqttPublishTopic, homematicPublishISE, sensorJSONfile, &sensorJSONkeys, isCounter, sensorFactor, sensorOffset, sensorMinimumRestPeriod, _rBuffer);
+							sensorJSON* jsonSensor = new sensorJSON(this, sensorID, mqttPublishTopic, homematicPublishISE, sensorJSONfile, &sensorJSONkeys, isCounter, sensorFactor, sensorOffset, sensorMinimumRestPeriod, sensorRetryTime, _rBuffer);
 							_sensors.push_back(jsonSensor);
 						}
 						else if(tinkerforge_uid.size() > 0)
 						{
-							sensorTinkerforge* tfSensor = new sensorTinkerforge(this, sensorID, mqttPublishTopic, homematicPublishISE, _tfDaemon, tinkerforge_uid, triggerEvent, isCounter, channel, ioPort, io_debounce_ms, sensorFactor, sensorOffset, sensorMinimumRestPeriod);
-							_sensors.push_back(tfSensor);
+							#ifdef OPTION_TINKERFORGE
+								sensorTinkerforge* tfSensor = new sensorTinkerforge(this, sensorID, mqttPublishTopic, homematicPublishISE, _tfDaemon, tinkerforge_uid, triggerEvent, isCounter, channel, ioPort, io_debounce_ms, sensorFactor, sensorOffset, sensorMinimumRestPeriod, sensorRetryTime);
+								_sensors.push_back(tfSensor);
+							#else
+								error("Cannot add Tinkerforge sensor. This version of Sensorlogger was compiled without support for Tinkerforge.");
+							#endif
 						}
 						else if(mqttSubscribeTopic.size() > 0)
 						{
-							sensorMQTT* mqttSensor = new sensorMQTT(this, sensorID, mqttPublishTopic, homematicPublishISE, mqttSubscribeTopic, &sensorJSONkeys, isCounter, sensorFactor, sensorOffset, sensorMinimumRestPeriod);
-							_sensors.push_back(mqttSensor);
+							#ifdef OPTION_MQTT
+								sensorMQTT* mqttSensor = new sensorMQTT(this, sensorID, mqttPublishTopic, homematicPublishISE, mqttSubscribeTopic, &sensorJSONkeys, isCounter, sensorFactor, sensorOffset, sensorMinimumRestPeriod, sensorRetryTime);
+								_sensors.push_back(mqttSensor);
+							#else
+								error("Cannot add MQTT sensor. This version of Sensorlogger was compiled without support for MQTT.");
+							#endif
 						}
 						else if(homematicSubscribeISE.size() > 0)
 						{
-							sensorHomematic* homematicSensor = new sensorHomematic(this, _homematic, sensorID, mqttPublishTopic, homematicPublishISE, homematicSubscribeISE, isCounter, sensorFactor, sensorOffset, sensorMinimumRestPeriod);
+							sensorHomematic* homematicSensor = new sensorHomematic(this, _homematic, sensorID, mqttPublishTopic, homematicPublishISE, homematicSubscribeISE, isCounter, sensorFactor, sensorOffset, sensorMinimumRestPeriod, sensorRetryTime);
 							_sensors.push_back(homematicSensor);
 						}
 					}
@@ -370,12 +511,12 @@ void logger::loadConfig(const std::string &configJSON)
 					{
 						std::stringstream ss;
 						ss << "Error in configuration for sensor #" << (i+1);
-						message(ss.str(), true);
+						error(ss.str());
 					}
 				}
 			}
 		} catch(int e) {
-			message("No valid sensor configuration found.", true);
+			error("No valid sensor configuration found.");
 		}
 
 		// Logging configuration
@@ -397,7 +538,7 @@ void logger::loadConfig(const std::string &configJSON)
 						} catch(int e) {
 							std::stringstream ss;
 							ss << "Warning for configuration for logbook #" << (i+1) << ": no filename specified.";
-							message(ss.str(), true);
+							error(ss.str());
 						}
 
 						uint64_t cycleTime = DEFAULT_CYCLETIME;
@@ -406,7 +547,7 @@ void logger::loadConfig(const std::string &configJSON)
 						} catch(int e) {
 							std::stringstream ss;
 							ss << "Error in configuration for logbook #" << (i+1) << ": cannot get cycle_time. Default to " << cycleTime<<".";
-							message(ss.str(), true);
+							error(ss.str());
 						}
 
 						unsigned maxEntries = DEFAULT_MAX_ENTRIES;
@@ -415,7 +556,7 @@ void logger::loadConfig(const std::string &configJSON)
 						} catch(int e) {
 							std::stringstream ss;
 							ss << "Error in configuration for logbook #" << (i+1) << ": cannot get max_entries. Default to " << maxEntries<<".";
-							message(ss.str(), true);
+							error(ss.str());
 						}
 
 						std::string missingDataToken = "-";
@@ -445,7 +586,7 @@ void logger::loadConfig(const std::string &configJSON)
 									} catch(int e) {
 										std::stringstream ss;
 										ss << "Error in configuration for logbook #" << (i+1) << ", column #" << (c+1) <<": sensor_id not found.";
-										message(ss.str(), true);
+										error(ss.str());
 										throw e;
 									}
 
@@ -454,7 +595,7 @@ void logger::loadConfig(const std::string &configJSON)
 									} catch(int e) {
 										std::stringstream ss;
 										ss << "Error in configuration for logbook #" << (i+1) << ", column #" << (c+1) <<": sensor \'" << colSensorID << "\' not found.";
-										message(ss.str(), true);
+										error(ss.str());
 										throw e;
 									}
 									
@@ -464,7 +605,7 @@ void logger::loadConfig(const std::string &configJSON)
 									} catch(int e) {
 										std::stringstream ss;
 										ss << "Warning in configuration for logbook #" << (i+1) << ", column #" << (c+1) <<": no title found.";
-										message(ss.str(), true);
+										error(ss.str());
 									}
 
 									std::string unit = "";
@@ -496,12 +637,12 @@ void logger::loadConfig(const std::string &configJSON)
 										{
 											std::stringstream ss;
 											ss << "Error in configuration for logbook #" << (i+1) << ", column #" << (c+1) <<": \'" << colOpString << "\' is not a valid operation.";
-											message(ss.str(), true);
+											error(ss.str());
 										}
 									} catch(int e) {
 										std::stringstream ss;
 										ss << "Error in configuration for logbook #" << (i+1) << ", column #" << (c+1) <<": no operation found.";
-										message(ss.str(), true);
+										error(ss.str());
 									}
 
 									double confidenceAbsolute = 0;
@@ -536,7 +677,7 @@ void logger::loadConfig(const std::string &configJSON)
 								{
 									std::stringstream ss;
 									ss << "Error in configuration for logbook #" << (i+1) << ", column #" << (c+1) <<".";
-									message(ss.str(), true);
+									error(ss.str());
 								}
 								
 
@@ -544,20 +685,20 @@ void logger::loadConfig(const std::string &configJSON)
 						} catch(int e) {
 							std::stringstream ss;
 							ss << "Error in configuration for logbook #" << (i+1) << ": error parsing column information.";
-							message(ss.str(), true);
+							error(ss.str());
 						}
 					}
 					catch(int e)
 					{
 						std::stringstream ss;
 						ss << "Error in configuration for logbook #" << (i+1);
-						message(ss.str(), true);
+						error(ss.str());
 					}
 				}
 			}
 			catch(int e)
 			{
-				message("Error in configuration for the logbooks.", true);
+				error("Error in configuration for the logbooks.");
 			}
 		}
 
@@ -586,111 +727,114 @@ void logger::loadConfig(const std::string &configJSON)
 				{
 					try
 					{
-						std::string mqttHost = mqttNode->element("host")->value()->getString();
-						int mqttPort = mqttNode->element("port")->value()->getInt();
+						#ifdef OPTION_MQTT
+							std::string mqttHost = mqttNode->element("host")->value()->getString();
+							int mqttPort = mqttNode->element("port")->value()->getInt();
 
-						int mqttQoS = 1;
-						try
-						{
-							mqttQoS = mqttNode->element("qos")->value()->getInt();
-						}
-						catch(int e)
-						{
-							std::stringstream ss;
-							ss << "No MQTT QoS defined. Default to " << mqttQoS << ".";
-							message(ss.str(), false);
-						}
+							int mqttQoS = 1;
+							try
+							{
+								mqttQoS = mqttNode->element("qos")->value()->getInt();
+							}
+							catch(int e)
+							{
+								std::stringstream ss;
+								ss << "No MQTT QoS defined. Default to " << mqttQoS << ".";
+								info(ss.str());
+							}
 
-						bool mqttRetained = false;
-						try
-						{
-							mqttRetained = mqttNode->element("retained")->value()->getBool();
-						}
-						catch(int e)
-						{
-							std::stringstream ss;
-							ss << "No MQTT \'retained\' setting defined. Default to false.";
-							message(ss.str(), false);
-						}
+							bool mqttRetained = false;
+							try
+							{
+								mqttRetained = mqttNode->element("retained")->value()->getBool();
+							}
+							catch(int e)
+							{
+								std::stringstream ss;
+								ss << "No MQTT \'retained\' setting defined. Default to false.";
+								info(ss.str());
+							}
 
-						bool mqttPublishEnabled = true;
-						try
-						{
-							mqttPublishEnabled = mqttNode->element("enable_publish")->value()->getBool();
-						}
-						catch(int e)
-						{
-							
-						}
+							bool mqttPublishEnabled = true;
+							try
+							{
+								mqttPublishEnabled = mqttNode->element("enable_publish")->value()->getBool();
+							}
+							catch(int e)
+							{
+								
+							}
 
-						bool mqttSubscribeEnabled = true;
-						try
-						{
-							mqttSubscribeEnabled = mqttNode->element("enable_subscribe")->value()->getBool();
-						}
-						catch(int e)
-						{
-							
-						}
+							bool mqttSubscribeEnabled = true;
+							try
+							{
+								mqttSubscribeEnabled = mqttNode->element("enable_subscribe")->value()->getBool();
+							}
+							catch(int e)
+							{
+								
+							}
 
-						std::string mqtt_topic_domain;
-						std::string mqtt_connected_topic;
-						std::string mqtt_connected_payload;
-						std::string mqtt_lwt_topic;
-						std::string mqtt_lwt_payload;
+							std::string mqtt_topic_domain;
+							std::string mqtt_connected_topic;
+							std::string mqtt_connected_payload;
+							std::string mqtt_lwt_topic;
+							std::string mqtt_lwt_payload;
 
-						try
-						{
-							mqtt_topic_domain = mqttNode->element("topic_domain")->value()->getString();
-						}
-						catch(int e) { }
+							try
+							{
+								mqtt_topic_domain = mqttNode->element("topic_domain")->value()->getString();
+							}
+							catch(int e) { }
 
-						try
-						{
-							mqtt_connected_topic = mqttNode->element("connected_topic")->value()->getString();
-						}
-						catch(int e) { }
+							try
+							{
+								mqtt_connected_topic = mqttNode->element("connected_topic")->value()->getString();
+							}
+							catch(int e) { }
 
-						try
-						{
-							mqtt_connected_payload = mqttNode->element("connected_message")->value()->getString();
-						}
-						catch(int e) { }
+							try
+							{
+								mqtt_connected_payload = mqttNode->element("connected_message")->value()->getString();
+							}
+							catch(int e) { }
 
-						try
-						{
-							mqtt_lwt_topic = mqttNode->element("lwt_topic")->value()->getString();
-						}
-						catch(int e) { }
+							try
+							{
+								mqtt_lwt_topic = mqttNode->element("lwt_topic")->value()->getString();
+							}
+							catch(int e) { }
 
-						try
-						{
-							mqtt_lwt_payload = mqttNode->element("lwt_message")->value()->getString();
-						}
-						catch(int e) { }
+							try
+							{
+								mqtt_lwt_payload = mqttNode->element("lwt_message")->value()->getString();
+							}
+							catch(int e) { }
 
+							if(mqttHost.size() > 0)
+							{
+								mqttBroker *b = new mqttBroker(this);
+								b->setHost(mqttHost);
+								b->setPort(mqttPort);
+								b->setQoS(mqttQoS);
+								b->setRetained(mqttRetained);
+								b->setConnectedTopic(mqtt_connected_topic);
+								b->setConnectedPayload(mqtt_connected_payload);
+								b->setLWTtopic(mqtt_lwt_topic);
+								b->setLWTpayload(mqtt_lwt_payload);
+								b->enablePublish(mqttPublishEnabled);
+								b->enableSubscribe(mqttSubscribeEnabled);
+								b->setTopicDomain(mqtt_topic_domain);
 
-						if(mqttHost.size() > 0)
-						{
-							mqttBroker *b = new mqttBroker(this);
-							b->setHost(mqttHost);
-							b->setPort(mqttPort);
-							b->setQoS(mqttQoS);
-							b->setRetained(mqttRetained);
-							b->setConnectedTopic(mqtt_connected_topic);
-							b->setConnectedPayload(mqtt_connected_payload);
-							b->setLWTtopic(mqtt_lwt_topic);
-							b->setLWTpayload(mqtt_lwt_payload);
-							b->enablePublish(mqttPublishEnabled);
-							b->enableSubscribe(mqttSubscribeEnabled);
-							b->setTopicDomain(mqtt_topic_domain);
-
-							_mqttManager->addBroker(b);
-						}
+								_mqttManager->addBroker(b);
+							}
+						#else
+							error("Cannot set up MQTT broker. This version of Sensorlogger was compiled without support for MQTT.");
+						#endif
 					}
 					catch(int e)
 					{
-						message("Error in MQTT configuration.", true);
+						error("MQTT configuration contains errors.");
 					}
 				}
 
@@ -704,7 +848,7 @@ void logger::loadConfig(const std::string &configJSON)
 	}
 	catch(int e)
 	{
-		message("Error parsing config file: " + configJSON, true);
+		error("Parsing config file failed: " + configJSON);
 		throw E_JSON_READ;
 	}
 }
@@ -720,6 +864,11 @@ std::string logger::logfileState() const
 		return "Logging disabled.";
 	else
 		return _logFilename;
+}
+
+uint64_t logger::getDefaultRetryTime() const
+{
+	return _default_retry_time;
 }
 
 size_t logger::nSensors() const
@@ -756,28 +905,40 @@ uint64_t logger::currentTimestamp() const
 
 std::string logger::httpRequest(const std::string url)
 {
-	if(_curl)
-	{
-		std::string response;
-
-		curl_easy_setopt(_curl, CURLOPT_URL, url.c_str());
-		curl_easy_setopt(_curl, CURLOPT_FOLLOWLOCATION, 1L);
-		curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, receiveHTTP);
-		curl_easy_setopt(_curl, CURLOPT_WRITEDATA, &response);
-
-		CURLcode res = curl_easy_perform(_curl);
-		if(res != CURLE_OK)
+	#ifdef OPTION_CURL
+		if(_curl)
 		{
-			std::string easyReadError = curl_easy_strerror(res);
-			message("HTTP(S) request failed: " + easyReadError, true);
+			std::string response;
 
-			throw E_HTTP_REQUEST_FAILED;
+			curl_easy_setopt(_curl, CURLOPT_URL, url.c_str());
+			curl_easy_setopt(_curl, CURLOPT_FOLLOWLOCATION, 1L);
+			curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, receiveHTTP);
+			curl_easy_setopt(_curl, CURLOPT_WRITEDATA, &response);
+			curl_easy_setopt(_curl, CURLOPT_TIMEOUT, _http_timeout);
+
+			// Do not download more than 10 MB = 10485760 Byte:
+			curl_easy_setopt(_curl, CURLOPT_MAXFILESIZE, DEFAULT_HTTP_MAXFILESIZE);
+
+			// Maximum redirects:
+			curl_easy_setopt(_curl, CURLOPT_MAXREDIRS, DEFAULT_HTTP_MAXREDIRS);
+
+			CURLcode res = curl_easy_perform(_curl);
+			if(res != CURLE_OK)
+			{
+				std::string easyReadError = curl_easy_strerror(res);
+				error("HTTP(S) request failed: " + easyReadError);
+
+				throw E_HTTP_REQUEST_FAILED;
+			}
+
+			return response;
 		}
 
-		return response;
-	}
-
-	throw E_HTTP_REQUEST_FAILED;
+		throw E_HTTP_REQUEST_FAILED;
+	#else
+		error("Cannot make HTTP(S) request. This version of Sensorlogger was compiled without support for libcurl.");
+		return "";
+	#endif
 }
 
 void logger::setUpConnections()
@@ -787,7 +948,7 @@ void logger::setUpConnections()
 
 void logger::executeSystemCommand(const std::string &command)
 {
-	message("Execute command: "+command, false);
+	info("Execute system command: "+command);
 
 	FILE *fp;
 
@@ -804,13 +965,13 @@ void logger::executeSystemCommand(const std::string &command)
 
 		int status = pclose(fp);
 		if(status == -1)
-			message("Error executing the command.", true);
+			error("Executing the command failed.");
 
 		if(output.size() > 0)
-			message(output, false);
+			info(output);
 	}
 	else
-		message("Error executing the command.", true);
+		error("Executing the command failed.");
 }
 
 void logger::mqttPublish(const std::string &topic, const std::string &payload)
@@ -862,59 +1023,60 @@ void logger::trigger()
 		}
 	}
 
-	// Check if a restart of the Tinkerforge Brick Daemon might be necessary:
-
-	size_t nSensorsFailedTooMuch = 0;
-	for(size_t i=0; i<_sensors.size(); ++i)
-	{
-		if(_sensors.at(i)->type() == sensor_tinkerforge)
+	#ifdef OPTION_TINKERFORGE
+		// Check if a restart of the Tinkerforge Brick Daemon might be necessary:
+		size_t nSensorsFailedTooMuch = 0;
+		for(size_t i=0; i<_sensors.size(); ++i)
 		{
-			sensorTinkerforge* s = dynamic_cast<sensorTinkerforge*>(_sensors.at(i));
-			if(s->getReadFailures() > 0)
+			if(_sensors.at(i)->type() == sensor_tinkerforge)
 			{
-				if(s->getReadFailures() >= _max_tinkerforge_read_failures)
+				sensorTinkerforge* s = dynamic_cast<sensorTinkerforge*>(_sensors.at(i));
+				if(s->getReadFailures() > 0)
 				{
-					if(nSensorsFailedTooMuch == 0)
+					if(s->getReadFailures() >= _max_tinkerforge_read_failures)
 					{
-						message("Too many Tinkerforge Bricklet read failures:", true);
+						if(nSensorsFailedTooMuch == 0)
+						{
+							error("Too many Tinkerforge Bricklet read failures:");
+						}
+
+						std::stringstream ss;
+						ss << "  Bricklet \'" << s->getUID() << "\' ("<< getDeviceType_name(s->getDeviceType()) << "): " << s->getReadFailures() << " read failures.";
+						error(ss.str());
+
+						++nSensorsFailedTooMuch;
 					}
-
-					std::stringstream ss;
-					ss << "  Bricklet \'" << s->getUID() << "\' ("<< getDeviceType_name(s->getDeviceType()) << "): " << s->getReadFailures() << " read failures.";
-					message(ss.str(), true);
-
-					++nSensorsFailedTooMuch;
 				}
 			}
 		}
-	}
 
-	if(nSensorsFailedTooMuch > 0)
-	{
-		// Reset all sensor read failures:
-		for(size_t i=0; i<_sensors.size(); ++i)
-			_sensors.at(i)->resetReadFailures();
-
-		if(_brickd_restart_attempt_counter >= _max_brickd_restart_attempts)
+		if(nSensorsFailedTooMuch > 0)
 		{
-			_brickd_restart_attempt_counter = 0;
-			
-			if(_cmd_readFailures_critical.size() > 0)
+			// Reset all sensor read failures:
+			for(size_t i=0; i<_sensors.size(); ++i)
+				_sensors.at(i)->resetReadFailures();
+
+			if(_brickd_restart_attempt_counter >= _max_brickd_restart_attempts)
 			{
-				message("Trying to reboot the entire system...", true);
-				executeSystemCommand(_cmd_readFailures_critical);
-				std::this_thread::sleep_for(std::chrono::seconds(2));
+				_brickd_restart_attempt_counter = 0;
+				
+				if(_cmd_readFailures_critical.size() > 0)
+				{
+					error("Trying to reboot the entire system...");
+					executeSystemCommand(_cmd_readFailures_critical);
+					std::this_thread::sleep_for(std::chrono::seconds(2));
+				}
+
+				return;
 			}
 
-			return;
+			if(_cmd_readFailures.size() > 0)
+			{
+				error("Trying to restart Brick Daemon...");
+				executeSystemCommand(_cmd_readFailures);
+				++_brickd_restart_attempt_counter;
+				std::this_thread::sleep_for(std::chrono::seconds(30));
+			}
 		}
-
-		if(_cmd_readFailures.size() > 0)
-		{
-			message("Trying to restart Brick Daemon...", true);
-			executeSystemCommand(_cmd_readFailures);
-			++_brickd_restart_attempt_counter;
-			std::this_thread::sleep_for(std::chrono::seconds(30));
-		}
-	}	
+	#endif
 }

@@ -521,7 +521,7 @@ void jsonNode::parseObject(const std::string &content, size_t start, size_t stop
 							break;
 						else
 						{
-							std::cerr << "Comma or end of object expected at position " << value_stop << ". Stop is at " << stop << ". Here is: "<< content.at(value_stop) << std::endl;
+							std::cerr << "Comma or end of object expected at position " << value_stop << ". Stop is at " << stop << ". "<< content.at(value_stop) << std::endl;
 							throw E_COMMA_OR_END_OF_OBJECT_EXPECTED;
 						}
 					}

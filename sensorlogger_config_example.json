@@ -1,7 +1,11 @@
 {
     "general": {
         "comment": "This is an example configuration file to show all configuration options. You can often delete options that you don't need. Please refer to the manual for details.",
-        "logfile": "/home/username/sensorlogger.log"
+        "logfile": "/home/username/sensorlogger.log",
+        "loglevel": "info",
+        "http_timeout": 20,
+        "default_rest_period": {"value": 60, "unit": "s"},
+        "default_retry_time":  {"value": 10, "unit": "s"}
     },
 
     "tinkerforge": {
@@ -47,6 +51,7 @@
             "counter": false,
             "trigger": "periodic",
             "rest_period": {"value": 60, "unit": "s"},
+            "retry_time":  {"value": 30, "unit": "s"},
             "mqtt_publish": "Weather/Temperature/current",
             "homematic_publish": "25484"
         },
@@ -80,6 +85,7 @@
             "counter": false,
             "trigger": "periodic",
             "rest_period": {"value": 2, "unit": "min"},
+            "retry_time":  {"value": 30, "unit": "s"},
             "mqtt_publish": "House/Living_Room/Humidity/current"
         },
         {
@@ -91,6 +97,7 @@
             "offset": 0,
             "trigger": "periodic",
             "rest_period": {"value": 5, "unit": "s"},
+            "retry_time":  {"value": 2, "unit": "s"},
             "mqtt_publish": "House/Solar/Power/current",
             "homematic_publish": "23674"
         }

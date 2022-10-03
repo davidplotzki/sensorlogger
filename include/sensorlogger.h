@@ -1,13 +1,17 @@
 #ifndef _SENSORLOGGER_H
-#define _SENSORLOGGER H
+#define _SENSORLOGGER_H
 
-#define SENSORLOGGER_VERSION "1.1"
-#define SENSORLOGGER_VERSION_DATE "2021-05-22"
+#define SENSORLOGGER_VERSION "1.2"
+#define SENSORLOGGER_VERSION_DATE "2022-10-03"
 
 // Logbook and measurement defaults:
 #define DEFAULT_CYCLETIME            900000  // 15 minutes
 #define DEFAULT_MAX_ENTRIES          30
 #define DEFAULT_MEASUREMENT_INTERVAL 60000   // 60 seconds
+#define DEFAULT_RETRY_TIME           300000  // 5 minutes
+#define DEFAULT_HTTP_TIMEOUT         10L
+#define DEFAULT_HTTP_MAXFILESIZE     10485760L  // 10 MB
+#define DEFAULT_HTTP_MAXREDIRS       10L
 
 // Tinerforge Defaults:
 #define DEFAULT_MAX_BRICKLET_READ_FAILURES   7

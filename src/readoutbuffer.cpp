@@ -55,7 +55,7 @@ std::string readoutFile::getContent(logger* root, uint64_t currentTimestamp)
 			}
 			catch(int e)
 			{
-				root->message("Cannot read from: " + _filename, true);
+				root->error("Cannot read from: " + _filename);
 			}
 		}
 		else   // file in file system

@@ -1,3 +1,5 @@
+#ifdef OPTION_MQTT
+
 #include "mqttbroker.h"
 
 #include "sensorlogger.h"
@@ -31,7 +33,7 @@ mqttBroker::~mqttBroker()
 		catch (const mqtt::exception& exc) {
 			std::stringstream ss;
 			ss << exc.what();
-			_root->message(ss.str(), true);
+			_root->error(ss.str());
 		}
 
 		delete _mqttClient;
@@ -134,7 +136,7 @@ void mqttBroker::generateClientID()
 	cliID << "Sensorlogger_" << _root->currentTimestamp();
 	_clientID = cliID.str();
 
-	_root->message("MQTT Client ID: "+_clientID, false);
+	_root->info("MQTT Client ID: "+_clientID);
 }
 
 
@@ -164,8 +166,8 @@ void mqttBroker::reconnect()
 	}
 	catch (const mqtt::exception& exc) {
 		std::stringstream ss;
-		ss << "Error: " << exc.what();
-		_root->message(ss.str(), true);
+		ss << exc.what();
+		_root->error(ss.str());
 		return;
 	}
 }
@@ -175,7 +177,7 @@ void mqttBroker::on_failure(const mqtt::token& tok)
 {
 	std::stringstream ss;
 	ss << "Failed to connect to MQTT Broker at " << _host << ":" << _port;
-	_root->message(ss.str(), true);
+	_root->error(ss.str());
 
 	reconnect();
 }
@@ -186,7 +188,7 @@ void mqttBroker::on_success(const mqtt::token& tok)
 {
 	std::stringstream ss;
 	ss << "Connected to MQTT Broker at " << _host << ":" << _port << ".";
-	_root->message(ss.str(), false);
+	_root->info(ss.str());
 }
 
 // (Re)connection success
@@ -228,12 +230,12 @@ void mqttBroker::connection_lost(const std::string& cause)
 	_isConnected = false;
 
 	std::stringstream ss;
-	ss << "Connection to MQTT Broker lost.";
+	ss << "Connection to MQTT Broker lost: " << _host << ":" << _port << ".";
 	if (!cause.empty())
 		ss << " Cause: " << cause;
 
-	_root->message(ss.str(), true);
-	_root->message("Reconnecting to MQTT Broker...", false);
+	_root->error(ss.str());
+	_root->info("Reconnecting to MQTT Broker...");
 
 	reconnect();
 }
@@ -273,7 +275,7 @@ void mqttBroker::message_arrived(mqtt::const_message_ptr msg)
 							{
 								std::stringstream ss;
 								ss << "Error finding value for JSON key \'" << smqtt->jsonKey(key) << "\' in MQTT message. Topic: \'" << topic << "\', Payload: '" << payload << "\'.";
-								_root->message(ss.str(), true);
+								_root->error(ss.str());
 								throw e;
 							}
 						}
@@ -288,7 +290,7 @@ void mqttBroker::message_arrived(mqtt::const_message_ptr msg)
 					{
 						std::stringstream ss;
 						ss << "Error parsing JSON payload in MQTT message. Topic: \'" << topic << "\', Payload: '" << payload << "\'.";
-						_root->message(ss.str(), true);
+						_root->error(ss.str());
 					}
 				}
 				else
@@ -334,14 +336,14 @@ void mqttBroker::connectToMQTTBroker()
 		try {
 			std::stringstream ss;
 			ss << "Connecting to MQTT Broker at " << _host << ":" << _port << "...";
-			_root->message(ss.str(), false);
+			_root->info(ss.str());
 
 			_mqttClient->connect(_connOpts, nullptr, *this);
 		}
 		catch (const mqtt::exception&) {
 			std::stringstream ss;
 			ss << "Error connecting to MQTT Broker at " << _host << ":" << _port << ".";
-			_root->message(ss.str(), true);
+			_root->error(ss.str());
 		}
 	}
 }
@@ -359,3 +361,5 @@ void mqttBroker::publish(const std::string &topic, const std::string &payload, b
 		}
 	}
 }
+
+#endif

@@ -1,6 +1,8 @@
 #ifndef _MQTTBROKER_H
 #define _MQTTBROKER_H
 
+#ifdef OPTION_MQTT
+
 #include <sstream>
 #include "mqtt/async_client.h"
 
@@ -71,4 +73,9 @@ public:
 	void publish(const std::string &topic, const std::string &payload, bool enforce);
 };
 
+#else
+
+class mqttBroker {};
+
+#endif
 #endif

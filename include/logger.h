@@ -13,7 +13,17 @@
 #include <string>
 #include <vector>
 #include <thread>
-#include <curl/curl.h>
+
+#ifdef OPTION_CURL
+	#include <curl/curl.h>
+#endif
+
+enum loglevel {
+	loglevel_debug   = 0,
+	loglevel_info    = 1,
+	loglevel_warning = 2,
+	loglevel_error   = 3
+};
 
 class readoutBuffer;
 class tinkerforge;
@@ -28,6 +38,10 @@ class logger
 private:
 	std::string _logFilename;
 	std::string _lastLogfileMessage;
+	int _logLevel;
+
+	uint64_t _default_rest_period;
+	uint64_t _default_retry_time;
 
 	readoutBuffer* _rBuffer;
 	bool _verbose;
@@ -41,21 +55,37 @@ private:
 	std::vector<sensor*> _sensors;
 	std::vector<logbook*> _logbooks;
 
-	tinkerforge* _tfDaemon;
+	#ifdef OPTION_TINKERFORGE
+		tinkerforge* _tfDaemon;
+	#endif
+
 	mqttManager* _mqttManager;
 	homematic* _homematic;
 
-	CURL* _curl;
+	#ifdef OPTION_CURL
+		CURL* _curl;
+	#endif
+
+	long _http_timeout;
 
 public:
 	logger();
 	~logger();
+
+	void info(const std::string &info_message);
+	void warning(const std::string &warning_message);
+	void error(const std::string &error_message);
+	void debug(const std::string &debug_message);
 	void message(const std::string &m, bool isError);
+	std::string logLevelString();
+	void welcomeMessage(const std::string &configJSON);
+
 	void loadConfig(const std::string &configJSON);
 
-	void welcomeMessage(const std::string &configJSON);
 	std::string getLogFilename() const;
 	std::string logfileState() const;
+
+	uint64_t getDefaultRetryTime() const;
 
 	size_t nSensors() const;
 	sensor* getSensor(std::string sensorID);

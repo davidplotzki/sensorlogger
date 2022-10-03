@@ -1,3 +1,5 @@
+#ifdef OPTION_TINKERFORGE
+
 #include "tinkerforge.h"
 
 #include "sensor_tinkerforge.h"
@@ -342,3 +344,5 @@ void callback_io_v2(uint8_t channel, bool changed, bool value, sensorTinkerforge
 		}
 	}
 }
+
+#endif

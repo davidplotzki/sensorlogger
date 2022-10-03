@@ -4,7 +4,7 @@
 #include "homematic.h"
 #include "measurements.h"
 
-sensorHomematic::sensorHomematic(logger* root, homematic* hmPtr, const std::string &sensorID, const std::string &mqttPublishTopic, const std::string &homematicPublishISE, const std::string &homematicSubscribeISE, bool isCounter, double factor, double offset, uint64_t minimumRestPeriod)
+sensorHomematic::sensorHomematic(logger* root, homematic* hmPtr, const std::string &sensorID, const std::string &mqttPublishTopic, const std::string &homematicPublishISE, const std::string &homematicSubscribeISE, bool isCounter, double factor, double offset, uint64_t minimumRestPeriod, uint64_t retryTime)
 {
 	setPointerToLogger(root);
 	_homematic = hmPtr;
@@ -14,6 +14,7 @@ sensorHomematic::sensorHomematic(logger* root, homematic* hmPtr, const std::stri
 	setOffset(offset);
 	setCounter(isCounter);
 	setMinimumRestPeriod(minimumRestPeriod);
+	setRetryTime(retryTime);
 	setMQTTPublishTopic(mqttPublishTopic);
 	setHomematicPublishISE(homematicPublishISE);
 	setISE(homematicSubscribeISE);
@@ -56,12 +57,11 @@ bool sensorHomematic::measure(uint64_t currentTimestamp)
 			catch(int e)
 			{
 				addReadFailure();
-				_timestamp_lastMeasurement = currentTimestamp;
 
 				// homematic::getValue already reports errors.
 				// Only report other errors here...
 				if(e != E_CANNOT_READ_HM_SYSVAR)
-					_root->message("Error reading sensor: " + _sensorID, true);
+					_root->error("Cannot read HomeMatic system variable for sensor: " + _sensorID);
 			}
 		}
 	}

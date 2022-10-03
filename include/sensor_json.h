@@ -12,7 +12,7 @@ private:
 	std::string _jsonFilename;
 
 public:
-	sensorJSON(logger* root, const std::string &sensorID, const std::string &mqttPublishTopic, const std::string &homematicPublishISE, const std::string &jsonFile, const std::vector<std::string>* jsonKeys, bool isCounter, double factor, double offset, uint64_t minimumRestPeriod, readoutBuffer* buffer);
+	sensorJSON(logger* root, const std::string &sensorID, const std::string &mqttPublishTopic, const std::string &homematicPublishISE, const std::string &jsonFile, const std::vector<std::string>* jsonKeys, bool isCounter, double factor, double offset, uint64_t minimumRestPeriod, uint64_t retryTime, readoutBuffer* buffer);
 
 	sensor_type type() const;
 

@@ -31,6 +31,7 @@ protected:
 	double        _offset;
 	uint64_t      _nReadFailures;      // number of read failures
 	uint64_t      _minimumRestPeriod;  // in ms
+	uint64_t	  _retry_time;
 	std::vector<std::string> _jsonKey;
 	std::string   _mqttPublishTopic;
 	std::string   _homematicPublishISE;
@@ -48,6 +49,8 @@ public:
 
 	virtual sensor_type type() const = 0;
 
+	std::string info() const;
+
 	void clean(uint64_t currentTimestamp);
 
 	void accumulateMaxTimeToKeep(uint64_t timeToKeep);
@@ -60,6 +63,7 @@ public:
 	void setFactor(double factor);
 	void setOffset(double offset);
 	void setMinimumRestPeriod(uint64_t minRestPeriod);
+	void setRetryTime(uint64_t retryTime);
 	void setMQTTPublishTopic(const std::string &mqttPublishTopic);
 	void setHomematicPublishISE(const std::string &homematicPublishISE);
 
@@ -76,6 +80,7 @@ public:
 	double getFactor() const;
 	double getOffset() const;
 	uint64_t getMinimumRestPeriod() const;
+	uint64_t getRetryTime() const;
 	std::string getMQTTPublishTopic() const;
 
 	uint64_t getReadFailures() const;

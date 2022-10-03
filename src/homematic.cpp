@@ -35,7 +35,7 @@ void homematic::publish(const std::string &iseID, const std::string &payload) co
 		}
 		catch(int e)
 		{
-			_root->message("Cannot publish to Homematic ISE " + iseID + ".", true);
+			_root->error("Cannot publish to Homematic ISE " + iseID + ".");
 		}
 	}
 }
@@ -100,20 +100,20 @@ std::string homematic::getValue(const std::string &iseID) const
 			}
 			else
 			{
-				_root->message("Cannot measure HomeMatic system variable with ISE ID " + iseID + ". Reason: no value=\'\' key in the string returned from the HomeMatic XML API. Requested URL: " + getterURL, true);
+				_root->error("Cannot measure HomeMatic system variable with ISE ID " + iseID + ". Reason: no value=\'\' key in the string returned from the HomeMatic XML API. Requested URL: " + getterURL);
 				throw E_CANNOT_READ_HM_SYSVAR;
 			}
 		}
 		catch(int e)
 		{
 			if(e != E_CANNOT_READ_HM_SYSVAR)
-				_root->message("Cannot measure HomeMatic system variable with ISE ID " + iseID + ". Requested URL: " + getterURL, true);
+				_root->error("Cannot measure HomeMatic system variable with ISE ID " + iseID + ". Requested URL: " + getterURL);
 
 			throw E_CANNOT_READ_HM_SYSVAR;
 		}
 	}
 
-	_root->message("Cannot measure HomeMatic system variable with ISE ID " + iseID + ". XML API URL: " + _xmlAPI_URL, true);
+	_root->error("Cannot measure HomeMatic system variable with ISE ID " + iseID + ". XML API URL: " + _xmlAPI_URL);
 
 	throw E_CANNOT_READ_HM_SYSVAR;
 }

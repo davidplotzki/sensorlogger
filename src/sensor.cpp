@@ -5,6 +5,8 @@
 #include "measurements.h"
 #include "json.h"
 
+#include <algorithm>
+
 sensor::sensor()
 {
 	resetReadFailures();
@@ -13,8 +15,10 @@ sensor::sensor()
 	setTriggerEvent(periodic);
 
 	_m = new measurements();
-
+	
+	setRetryTime(0);
 	_lastValuePublished = false;
+	_timestamp_lastMeasurement = 0;
 }
 
 sensor::~sensor()
@@ -78,6 +82,11 @@ void sensor::setMinimumRestPeriod(uint64_t minRestPeriod)
 {
 	_minimumRestPeriod = minRestPeriod;
 	_m->setMinimumRestPeriod(_minimumRestPeriod);
+}
+
+void sensor::setRetryTime(uint64_t retryTime)
+{
+	_retry_time = retryTime;
 }
 
 void sensor::setMQTTPublishTopic(const std::string &mqttPublishTopic)
@@ -152,6 +161,16 @@ uint64_t sensor::getMinimumRestPeriod() const
 	return _minimumRestPeriod;
 }
 
+uint64_t sensor::getRetryTime() const
+{
+	if(_retry_time > 0)
+	{
+		return _retry_time;
+	}
+
+	return _root->getDefaultRetryTime();
+}
+
 std::string sensor::getMQTTPublishTopic() const
 {
 	return _mqttPublishTopic;
@@ -169,8 +188,13 @@ void sensor::addReadFailure()
 	if(timeDiff(_timestamp_lastMeasurement, currentTimestamp) >= _minimumRestPeriod)
 	{
 		++_nReadFailures;
+
+		if(_timestamp_lastMeasurement == 0)
+		{
+			_timestamp_lastMeasurement = currentTimestamp - _minimumRestPeriod;
+		}
 		
-		_timestamp_lastMeasurement = currentTimestamp;
+		_timestamp_lastMeasurement += std::min(getRetryTime(), _minimumRestPeriod);
 		clean(currentTimestamp);
 	}
 }

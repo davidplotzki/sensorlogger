@@ -1,9 +1,11 @@
+#ifdef OPTION_TINKERFORGE
+
 #include "sensor_tinkerforge.h"
 
 #include "logger.h"
 #include "measurements.h"
 
-sensorTinkerforge::sensorTinkerforge(logger* root, const std::string &sensorID, const std::string &mqttPublishTopic, const std::string &homematicPublishISE, tinkerforge* tinkerManager, const std::string uid, trigger_event triggerEvent, bool isCounter, uint8_t channel, char ioPort, uint32_t debounceTime, double factor, double offset, uint64_t minimumRestPeriod)
+sensorTinkerforge::sensorTinkerforge(logger* root, const std::string &sensorID, const std::string &mqttPublishTopic, const std::string &homematicPublishISE, tinkerforge* tinkerManager, const std::string uid, trigger_event triggerEvent, bool isCounter, uint8_t channel, char ioPort, uint32_t debounceTime, double factor, double offset, uint64_t minimumRestPeriod, uint64_t retryTime)
 {
 	setPointerToLogger(root);
 	_isInitialized = false;
@@ -22,6 +24,7 @@ sensorTinkerforge::sensorTinkerforge(logger* root, const std::string &sensorID, 
 	setFactor(factor);
 	setOffset(offset);
 	setMinimumRestPeriod(minimumRestPeriod);
+	setRetryTime(retryTime);
 
 	setMQTTPublishTopic(mqttPublishTopic);
 	setHomematicPublishISE(homematicPublishISE);
@@ -125,7 +128,7 @@ void sensorTinkerforge::registerCallback()
 					ss << "Cannot register callback for unknown Bricklet \'" << getUID() << "\' (";
 					ss << getDeviceType_name(getDeviceType());
 					ss << ").";
-					_root->message(ss.str(), true);
+					_root->error(ss.str());
 					return;
 				}
 
@@ -162,10 +165,11 @@ void sensorTinkerforge::registerCallback()
 			catch(int e)
 			{
 				std::stringstream ss;
-				ss << "Error registering callback for Bricklet \'" << getUID() << "\' (";
+				ss << "Registering callback for Bricklet \'" << getUID() << "\' (";
 				ss << getDeviceType_name(getDeviceType());
 				ss << "): " << getTFConnectionErrorText(e);
-				_root->message(ss.str(), true);
+				ss << " failed.";
+				_root->error(ss.str());
 			}
 		}
 	}
@@ -176,7 +180,7 @@ void sensorTinkerforge::failWithReadError(int tf_error_code)
 	std::stringstream ss;
 	ss << "Read Error: Bricklet \'" << getUID() << "\' (" << getDeviceType_name(getDeviceType()) << "). ";
 	ss << "Tinkerforge Error Code " << tf_error_code << ": " << getTFConnectionErrorText(tf_error_code) << ".";
-	_root->message(ss.str(), true);
+	_root->error(ss.str());
 
 	addReadFailure();
 }
@@ -1479,7 +1483,7 @@ bool sensorTinkerforge::poll(uint64_t currentTimestamp)
 					else
 					{
 						ptc_destroy(&ptc);
-						_root->message("PTC Temperature Bricklet \'"+_uid+"\': no sensor connected.", true);
+						_root->error("PTC Temperature Bricklet \'"+_uid+"\': no sensor connected.");
 						addReadFailure();
 						return false;
 					}
@@ -1516,7 +1520,7 @@ bool sensorTinkerforge::poll(uint64_t currentTimestamp)
 					else
 					{
 						ptc_v2_destroy(&ptc2);
-						_root->message("PTC Temperature 2.0 Bricklet \'"+_uid+"\': no sensor connected.", true);
+						_root->error("PTC Temperature 2.0 Bricklet \'"+_uid+"\': no sensor connected.");
 						return false;
 					}
 					
@@ -1691,13 +1695,406 @@ bool sensorTinkerforge::poll(uint64_t currentTimestamp)
 					return true;
 					break;
 				}
+
+				case(HALL_EFFECT_V2_DEVICE_IDENTIFIER):
+				{
+					HallEffectV2 he;
+					hall_effect_v2_create(&he, _uid.c_str(), _tinkerMan->_ipcon);
+					
+					int16_t magnetic_flux_density;
+					int result = hall_effect_v2_get_magnetic_flux_density(&he, &magnetic_flux_density);
+
+					hall_effect_v2_destroy(&he);
+
+					if(result < 0)
+					{
+						failWithReadError(result);
+						return false;
+					}
+					else
+					{
+						int ivalue = static_cast<int>(magnetic_flux_density);
+						double value = static_cast<double>(ivalue);
+						addRawMeasurement(value);
+					}
+
+					return true;
+					break;
+				}
+
+				case(GPS_DEVICE_IDENTIFIER):
+				{
+					GPS gps;
+					gps_create(&gps, _uid.c_str(), _tinkerMan->_ipcon);
+					
+					uint32_t latitude, longitude;
+					char ns, ew;
+					uint16_t pdop, hdop, vdop, epe;
+					int result = gps_get_coordinates(&gps, &latitude, &ns, &longitude, &ew, &pdop, &hdop, &vdop, &epe);
+
+					gps_destroy(&gps);
+
+					if(result < 0)
+					{
+						failWithReadError(result);
+						return false;
+					}
+					else
+					{
+						int ivalue;
+						double value = 0;
+
+						switch(getChannel())
+						{
+							case(0):
+								ivalue = static_cast<int>(latitude);
+								value = static_cast<double>(ivalue) / 1000000.0;
+								if(ns=='S')
+								{
+									// Southern latitudes get a minus sign:
+									value = -value;
+								}
+								break;
+							case(1):
+								ivalue = static_cast<int>(longitude);
+								value = static_cast<double>(ivalue) / 1000000.0;
+								if(ew=='W')
+								{
+									// Western longitudes get a minus sign:
+									value = -value;
+								}
+								break;
+							case(6):
+								ivalue = static_cast<int>(pdop);
+								value = static_cast<double>(ivalue) / 100.0;
+								break;
+							case(7):
+								ivalue = static_cast<int>(hdop);
+								value = static_cast<double>(ivalue) / 100.0;
+								break;
+							case(8):
+								ivalue = static_cast<int>(vdop);
+								value = static_cast<double>(ivalue) / 100.0;
+								break;
+							case(9):
+								ivalue = static_cast<int>(epe);
+								value = static_cast<double>(ivalue) / 100.0;
+								break;
+						}  
+							
+						addRawMeasurement(value);
+					}
+
+					return true;
+					break;
+				}
+
+				case(GPS_V2_DEVICE_IDENTIFIER):
+				{
+					GPSV2 gps;
+					gps_v2_create(&gps, _uid.c_str(), _tinkerMan->_ipcon);
+
+					if((getChannel() == 0) || (getChannel() == 1))
+					{
+						// Latitude and longitude.
+						uint32_t latitude, longitude;
+						char ns, ew;
+						int result = gps_v2_get_coordinates(&gps, &latitude, &ns, &longitude, &ew);
+
+						if(result < 0)
+						{
+							failWithReadError(result);
+							return false;
+						}
+						else
+						{
+							int ivalue = 0;
+							double value = 0;
+
+							switch(getChannel())
+							{
+								case(0):
+									ivalue = static_cast<int>(latitude);
+									value = static_cast<double>(ivalue) / 1000000.0;
+									if(ns=='S')
+									{
+										// Southern latitudes get a minus sign:
+										value = -value;
+									}
+									break;
+								case(1):
+									ivalue = static_cast<int>(longitude);
+									value = static_cast<double>(ivalue) / 1000000.0;
+									if(ew=='W')
+									{
+										// Western longitudes get a minus sign:
+										value = -value;
+									}
+									break;
+							}
+
+							addRawMeasurement(value);
+						}
+					}
+					else if((getChannel() >= 2) && (getChannel() <= 3))
+					{
+						int32_t altitude, geoidal_separation;
+						int result = gps_v2_get_altitude(&gps, &altitude, &geoidal_separation);
+
+						if(result < 0)
+						{
+							failWithReadError(result);
+							return false;
+						}
+						else
+						{
+							int ivalue = 0;
+							double value = 0;
+
+							switch(getChannel())
+							{
+								case(2):
+									ivalue = static_cast<int>(altitude);
+									value = static_cast<double>(ivalue) / 100.0;
+									break;
+								case(3):
+									ivalue = static_cast<int>(geoidal_separation);
+									value = static_cast<double>(ivalue) / 100.0;
+									break;
+							}
+
+							addRawMeasurement(value);
+						}
+					}
+					else if((getChannel() >= 4) && (getChannel() <= 5))
+					{
+						uint32_t speed, course;
+						int result = gps_v2_get_motion(&gps, &course, &speed);
+
+						if(result < 0)
+						{
+							failWithReadError(result);
+							return false;
+						}
+						else
+						{
+							int ivalue = 0;
+							double value = 0;
+
+							switch(getChannel())
+							{
+								case(4):
+									ivalue = static_cast<int>(speed);
+									value = static_cast<double>(ivalue) / 100.0;
+									break;
+								case(5):
+									ivalue = static_cast<int>(course);
+									value = static_cast<double>(ivalue) / 100.0;
+									break;
+							}
+
+							addRawMeasurement(value);
+						}
+					}
+					else if((getChannel() >= 6) && (getChannel() <= 8))
+					{
+						uint16_t pdop, hdop, vdop;
+						uint8_t* satNumbers = NULL;
+						uint8_t satNumbersLength, fix;
+						int result = gps_v2_get_satellite_system_status(&gps, GPS_V2_SATELLITE_SYSTEM_GPS, satNumbers, &satNumbersLength, &fix, &pdop, &hdop, &vdop);
+
+						if(result < 0)
+						{
+							failWithReadError(result);
+							return false;
+						}
+						else
+						{
+							int ivalue = 0;
+							double value = 0;
+
+							switch(getChannel())
+							{
+								case(6):
+									ivalue = static_cast<int>(pdop);
+									value = static_cast<double>(ivalue) / 100.0;
+									break;
+								case(7):
+									ivalue = static_cast<int>(hdop);
+									value = static_cast<double>(ivalue) / 100.0;
+									break;
+								case(8):
+									ivalue = static_cast<int>(vdop);
+									value = static_cast<double>(ivalue) / 100.0;
+									break;
+							}
+								
+							addRawMeasurement(value);
+						}
+					}
+
+					gps_v2_destroy(&gps);
+
+					return true;
+					break;
+				}
+
+				case(GPS_V3_DEVICE_IDENTIFIER):
+				{
+					GPSV3 gps;
+					gps_v3_create(&gps, _uid.c_str(), _tinkerMan->_ipcon);
+
+					if((getChannel() == 0) || (getChannel() == 1))
+					{
+						// Latitude and longitude.
+						uint32_t latitude, longitude;
+						char ns, ew;
+						int result = gps_v3_get_coordinates(&gps, &latitude, &ns, &longitude, &ew);
+
+						if(result < 0)
+						{
+							failWithReadError(result);
+							return false;
+						}
+						else
+						{
+							int ivalue = 0;
+							double value = 0;
+
+							switch(getChannel())
+							{
+								case(0):
+									ivalue = static_cast<int>(latitude);
+									value = static_cast<double>(ivalue) / 1000000.0;
+									if(ns=='S')
+									{
+										// Southern latitudes get a minus sign:
+										value = -value;
+									}
+									break;
+								case(1):
+									ivalue = static_cast<int>(longitude);
+									value = static_cast<double>(ivalue) / 1000000.0;
+									if(ew=='W')
+									{
+										// Western longitudes get a minus sign:
+										value = -value;
+									}
+									break;
+							}
+
+							addRawMeasurement(value);
+						}
+					}
+					else if((getChannel() >= 2) && (getChannel() <= 3))
+					{
+						int32_t altitude, geoidal_separation;
+						int result = gps_v3_get_altitude(&gps, &altitude, &geoidal_separation);
+
+						if(result < 0)
+						{
+							failWithReadError(result);
+							return false;
+						}
+						else
+						{
+							int ivalue = 0;
+							double value = 0;
+
+							switch(getChannel())
+							{
+								case(2):
+									ivalue = static_cast<int>(altitude);
+									value = static_cast<double>(ivalue) / 100.0;
+									break;
+								case(3):
+									ivalue = static_cast<int>(geoidal_separation);
+									value = static_cast<double>(ivalue) / 100.0;
+									break;
+							}
+
+							addRawMeasurement(value);
+						}
+					}
+					else if((getChannel() >= 4) && (getChannel() <= 5))
+					{
+						uint32_t speed, course;
+						int result = gps_v3_get_motion(&gps, &course, &speed);
+
+						if(result < 0)
+						{
+							failWithReadError(result);
+							return false;
+						}
+						else
+						{
+							int ivalue = 0;
+							double value = 0;
+
+							switch(getChannel())
+							{
+								case(4):
+									ivalue = static_cast<int>(speed);
+									value = static_cast<double>(ivalue) / 100.0;
+									break;
+								case(5):
+									ivalue = static_cast<int>(course);
+									value = static_cast<double>(ivalue) / 100.0;
+									break;
+							}
+
+							addRawMeasurement(value);
+						}
+					}
+					else if((getChannel() >= 6) && (getChannel() <= 8))
+					{
+						uint16_t pdop, hdop, vdop;
+						uint8_t* satNumbers = NULL;
+						uint8_t satNumbersLength, fix;
+						int result = gps_v3_get_satellite_system_status(&gps, GPS_V3_SATELLITE_SYSTEM_GPS, satNumbers, &satNumbersLength, &fix, &pdop, &hdop, &vdop);
+
+						if(result < 0)
+						{
+							failWithReadError(result);
+							return false;
+						}
+						else
+						{
+							int ivalue = 0;
+							double value = 0;
+
+							switch(getChannel())
+							{
+								case(6):
+									ivalue = static_cast<int>(pdop);
+									value = static_cast<double>(ivalue) / 100.0;
+									break;
+								case(7):
+									ivalue = static_cast<int>(hdop);
+									value = static_cast<double>(ivalue) / 100.0;
+									break;
+								case(8):
+									ivalue = static_cast<int>(vdop);
+									value = static_cast<double>(ivalue) / 100.0;
+									break;
+							}
+								
+							addRawMeasurement(value);
+						}
+					}
+
+					gps_v3_destroy(&gps);
+
+					return true;
+					break;
+				}
 			}
 		}
 		else
 		{
 			std::stringstream ss;
 			ss << "Tinkerforge sensor \'"<<_uid<<"\' is not known. The brick daemon did not assign any known device identifier to this bricklet. Assigned identifier is: "<<_deviceType<<".";
-			_root->message(ss.str(), true);
+			_root->error(ss.str());
 
 			addReadFailure();
 		}
@@ -1731,3 +2128,5 @@ bool sensorTinkerforge::measure(uint64_t currentTimestamp)
 
 	return false;
 }
+
+#endif

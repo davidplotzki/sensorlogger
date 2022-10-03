@@ -1,6 +1,8 @@
 #ifndef _SENSOR_MQTT_H
 #define _SENSOR_MQTT_H
 
+#ifdef OPTION_MQTT
+
 #include "mqtt/async_client.h"
 #include "sensor.h"
 
@@ -17,7 +19,7 @@ private:
 	void on_success(const mqtt::token& tok) override;
 
 public:
-	sensorMQTT(logger* root, const std::string &sensorID, const std::string &mqttPublishTopic, const std::string &homematicPublishISE, const std::string &mqttSubscribeTopic, const std::vector<std::string>* jsonKeys, bool isCounter, double factor, double offset, uint64_t minimumRestPeriod);
+	sensorMQTT(logger* root, const std::string &sensorID, const std::string &mqttPublishTopic, const std::string &homematicPublishISE, const std::string &mqttSubscribeTopic, const std::vector<std::string>* jsonKeys, bool isCounter, double factor, double offset, uint64_t minimumRestPeriod, uint64_t retryTime);
 
 	sensor_type type() const;
 	std::string getMQTTSubscribeTopic() const;
@@ -25,4 +27,5 @@ public:
 	bool measure(uint64_t currentTimestamp);
 };
 
+#endif
 #endif

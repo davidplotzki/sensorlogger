@@ -1,8 +1,9 @@
-#include "sensor_mqtt.h"
+#ifdef OPTION_MQTT
 
+#include "sensor_mqtt.h"
 #include "logger.h"
 
-sensorMQTT::sensorMQTT(logger* root, const std::string &sensorID, const std::string &mqttPublishTopic, const std::string &homematicPublishISE, const std::string &mqttSubscribeTopic, const std::vector<std::string>* jsonKeys, bool isCounter, double factor, double offset, uint64_t minimumRestPeriod)
+sensorMQTT::sensorMQTT(logger* root, const std::string &sensorID, const std::string &mqttPublishTopic, const std::string &homematicPublishISE, const std::string &mqttSubscribeTopic, const std::vector<std::string>* jsonKeys, bool isCounter, double factor, double offset, uint64_t minimumRestPeriod, uint64_t retryTime)
 {
 	setPointerToLogger(root);
 	setSensorID(sensorID);
@@ -12,6 +13,7 @@ sensorMQTT::sensorMQTT(logger* root, const std::string &sensorID, const std::str
 	setOffset(offset);
 	setCounter(isCounter);
 	setMinimumRestPeriod(minimumRestPeriod);
+	setRetryTime(retryTime);
 	setMQTTPublishTopic(mqttPublishTopic);
 	setMQTTSubscribeTopic(mqttSubscribeTopic);
 	setHomematicPublishISE(homematicPublishISE);
@@ -46,12 +48,14 @@ void sensorMQTT::on_failure(const mqtt::token& tok)
 {
 	std::stringstream ss;
 	ss << "MQTT Subscription " << _mqttSubscribeTopic << "failed.";
-	_root->message(ss.str(), true);
+	_root->error(ss.str());
 }
 
 void sensorMQTT::on_success(const mqtt::token& tok)
 {
 	std::stringstream ss;
 	ss << "Subscribed to MQTT topic: " << _mqttSubscribeTopic;
-	_root->message(ss.str(), false);
+	_root->info(ss.str());
 }
+
+#endif

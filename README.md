@@ -33,32 +33,28 @@ A system with support for 64 bit integer datatypes (C++ `uint64_t`) must be used
 
 Known software requirements for Linux:
 
-+ C++11 compiler, such as GCC 6 or higher
-+ Paho MQTT C and C++ libraries (and their dependencies)
-+ Libcurl and its C++ developer tools
++ C++17 compiler, such as GCC 7 or higher
++ For the MQTT option: Paho MQTT C and C++ libraries (and their dependencies)
++ For the HTTP option: Libcurl and its C++ developer tools
 
-## Installation
+## Compilation
 
-At first, the Paho MQTT libraries for C and C++ must be installed. You can get packages for Arch-based distributions for the AUR: [paho-mqtt-c-git](https://aur.archlinux.org/packages/paho-mqtt-c-git/) and [paho-mqtt-cpp-git](https://aur.archlinux.org/packages/paho-mqtt-cpp-git/). For Debian-based systems (e.g. Raspberry Pi, Tinkerforge Red Brick) we have to compile and install the libraries on our own. To do this, we need to make sure that we already have all the required packages installed:
+The software can be compiled with support for several libraries or interfaces. You can decide which ones you need. The first lines in the `makefile` contain three options that you can activate (`true`) or deactivate (`false`) as you wish.
 
-	apt-get install libssl-dev build-essential gcc make
-	apt-get install cmake cmake-gui cmake-curses-gui
+```
+# Options to choose which interfaces and libraries should be supported:
+OPTION_CURL = true
+OPTION_MQTT = true
+OPTION_TINKERFORGE = true
+```
 
-We now use git to download the [Eclipse Paho MQTT C library](https://github.com/eclipse/paho.mqtt.c), and compile and install it according to its documentation:
++ **`OPTION_CURL`** is needed for any HTTP(s) connections. This can be the case if JSON structures must be loaded from the internet or if you want to communicate with a HomeMatic CCU.
++ **`OPTION_MQTT`** is needed if you want to communicate with an MQTT Broker.
++ **`OPTION_TINKERFORGE`** activates support to communicate with a Brick Daemon to read Tinkerforge Bricklets.
 
-	git clone https://github.com/eclipse/paho.mqtt.c
-	cd paho.mqtt.c
-	make install
+### Curl Support
 
-In the next step follows the [Eclipse Paho MQTT C++ library](https://github.com/eclipse/paho.mqtt.cpp). If you also want to install the documentation and compile the examples, set the corresponding flags in the following command in the third line to `TRUE`.
-
-	git clone https://github.com/eclipse/paho.mqtt.cpp
-	cd paho.mqtt.cpp
-	cmake -Bbuild -H. -DPAHO_BUILD_DOCUMENTATION=FALSE -DPAHO_BUILD_SAMPLES=FALSE
-	sudo cmake --build build/ --target install
-	sudo ldconfig
-
-We need `libcurl` to establish HTTP(s) connections in order to fetch JSON structures or connect to a HomeMatic XML-API.
+If your Sensorlogger must connect to a HomeMatic CCU or if you want to load JSON information from the internet, you need to compile with support for `libcurl`. Make sure that it is installed:
 
 	apt-get install libcurl4
 
@@ -70,12 +66,38 @@ The virtual package `libcurl-dev` offers different implementations. All of them 
 
 	apt-get install libcurl4-gnutls-dev
 
-To compile Sensorlogger, run `make`.
+### MQTT Support
+
+If you need support for MQTT, the Paho MQTT libraries for C and C++ must be installed. You can get packages for Arch-based distributions for the AUR: [paho-mqtt-c-git](https://aur.archlinux.org/packages/paho-mqtt-c-git/) and [paho-mqtt-cpp-git](https://aur.archlinux.org/packages/paho-mqtt-cpp-git/). For Debian-based systems (e.g. Raspberry Pi, Tinkerforge Red Brick) we have to compile and install the libraries on our own. To do this, we need to make sure that we already have all the required packages installed:
+
+    apt-get install libssl-dev build-essential gcc make
+    apt-get install cmake cmake-gui cmake-curses-gui
+
+We now use git to download the [Eclipse Paho MQTT C library](https://github.com/eclipse/paho.mqtt.c), and compile and install it according to its documentation:
+
+    git clone https://github.com/eclipse/paho.mqtt.c
+    cd paho.mqtt.c
+    make install
+
+In the next step follows the [Eclipse Paho MQTT C++ library](https://github.com/eclipse/paho.mqtt.cpp). If you also want to install the documentation and compile the examples, set the corresponding flags in the following command in the third line to `TRUE`.
+
+    git clone https://github.com/eclipse/paho.mqtt.cpp
+    cd paho.mqtt.cpp
+    cmake -Bbuild -H. -DPAHO_BUILD_DOCUMENTATION=FALSE -DPAHO_BUILD_SAMPLES=FALSE
+    sudo cmake --build build/ --target install
+    sudo ldconfig
+
+### Tinkerforge Support
+
+The necessary source code for the [Tinkerforge](https://www.tinkerforge.com/) C/C++ bindings is already included, no extra steps need to be followed if you want to compile with Tinkerforge support.
+
+### Compiling Sensorlogger
+
+To compile Sensorlogger, run `make`. Take the source code either from GitHub or download it manually from the [Sensorlogger Website](https://tastyorange.de/projects/sensorlogger.htm).
 
 	git clone https://github.com/davidplotzki/sensorlogger
 	cd sensorlogger
 	make
-
 
 ## Startup
 
@@ -112,9 +134,9 @@ You could then use the following two commands to load the service into systemd a
 	systemctl enable sensorlogger
 
 
-## General configuration
+## Config file structure
 
-Further below, you will find a complete example configuration. Any Sensorlogger configuration file must be a JSON structure. It can contain the following sections, but not all of them are required.
+The file [sensorlogger_config_example.json](sensorlogger_config_example.json) contains a complete example configuration. Any Sensorlogger configuration file must be a JSON structure. It can contain the following sections, but not all of them are required.
 
 + `general` is meant for general settings and remarks (you can add your own). Currently, it only specifies the global event log file for errors and warnings.
 + `tinkerforge` contains the parameters for the connection to the Brick Daemon.
@@ -127,23 +149,9 @@ Generally, a configuration file must only contain the parameters and sections th
 
 **Hint:** you can use Firefox to open JSON files and make their tree structure visible. This can help you understand how JSON files work, and any errors in your file will be shown.
 
-### Setting the log file
-
-In the log file, status messages, warnings and errors will be reported. Please don’t confuse it with the log*books* used to record statistical data.
-
-```
-"general": {
-    "logfile": "sensorlogger.log"
-}
-```
-
-+ `"logfile":` path to a log file for status and error messages. Can be left blank or set to null if no log file is desired.
-
-    Standard value: `null`
-
 ### Example configuration
 
-Shown below is an example configuration file for the following scenario.
+In this repository, you can find an example configuration in the file [sensorlogger_config_example.json](sensorlogger_config_example.json). This file describes the following scenario:
 
 + An outside **weather station** has two Tinkerforge sensors: one for temperature, another one for wind. A Temperature Bricklet is used for the temperature measurement. The wind anemometer is connected to an IO Bricklet at channel 0 and Sensorlogger is used to count digital events (whenever a *low* state is reached).
 + In the **living room** we have a different temperature sensor that sends its measurements to an MQTT broker. Sensorlogger subscribes to its topic. Additionally, there is a HomeMatic humidity sensor in the living room. Sensorlogger reads its datapoint values every two minutes via the XML-API from the HomeMatic CCU.
@@ -151,251 +159,47 @@ Shown below is an example configuration file for the following scenario.
 + Two **logbooks** are defined: one for the weather station and another one for the house. The **weather** logbook contains one line every five minutes. In two columns, it contains the mean temperature for the last 15 minutes and the wind anemometer’s rotation frequency for the last five minutes (which is the logbook’s cycle time). The logbook for the **house** contains two columns for the mean living room temperature and humidity of the last 15 minutes (again, the cycle time) and two more columns for the mean and maximum electric power produced during the past 60 minutes.
 + Both the current sensor values as well as the statistical results for the logbook columns are sent to the **MQTT broker** using their own topics, as well as to the **HomeMatic CCU** using the ISE IDs for special system variables.
 
+## General settings
+
+The `general` section of the configuration file may contain the following settings.
+
 ```
-{
-    "general": {
-        "logfile": "/home/username/sensorlogger.log"
-    },
-
-    "tinkerforge": {
-        "comment": "Connecting to the Brick Daemon, and error management.",
-        "host": "192.168.1.2",
-        "port": 4223,
-        "max_bricklet_read_failures":  2,
-        "max_brickd_restart_attempts": 3,
-        "brickd_restart_command": null,
-        "system_restart_command": null  
-    },
-
-    "mqtt": [
-        {
-            "comment": "Connecting and communicating with the MQTT broker.",
-            "host": "192.168.1.3",
-            "port": 1883,
-            "qos": 1,
-            "retained": false,
-            "connected_topic": "Sensorlogger/status",
-            "connected_message": "online",
-            "lwt_topic": "Sensorlogger/status",
-            "lwt_message": "offline",
-            "enable_publish": true,
-            "enable_subscribe": true,
-            "topic_domain": ""
-        }
-    ],
-
-    "homematic": {
-        "comment": "URL of your HomeMatic's XML API",
-        "xmlapi_url": "http://192.168.1.4/config/xmlapi"
-    },
-
-    "sensors": [
-        {
-            "comment": "Tinkerforge sensor for outside temperature.",
-            "sensor_id": "Weather/Temperature",
-            "tinkerforge_uid": "z3L",
-            "channel": 0,
-            "factor": 1,
-            "offset": -4,
-            "counter": false,
-            "trigger": "periodic",
-            "rest_period": {"value": 60, "unit": "s"},
-            "mqtt_publish": "Weather/Temperature/current",
-            "homematic_publish": "25484"
-        },
-        {
-            "comment": "Tinkerforge IO bricklet triggers counter.",
-            "sensor_id": "Weather/Wind",
-            "tinkerforge_uid": "9Ws",
-            "channel": 0,
-            "counter": true,
-            "trigger": "low",
-            "rest_period": {"value": 8, "unit": "ms"},
-            "io_debounce": {"value": 8, "unit": "ms"}
-        },
-        {
-            "comment": "MQTT sensor for the living room temperature.",
-            "sensor_id": "House/Living_Room/Temperature",
-            "mqtt_subscribe": "House/Living_Room/Temperature/current",
-            "factor": 1,
-            "offset": 0,
-            "counter": false,
-            "trigger": "periodic",
-            "rest_period": {"value": 2, "unit": "min"},
-            "homematic_publish": "74633"
-        },
-        {
-            "comment": "HomeMatic sensor for the living room humidity.",
-            "sensor_id": "House/Living_Room/Humidity",
-            "homematic_subscribe": "94836",
-            "factor": 1,
-            "offset": 0,
-            "counter": false,
-            "trigger": "periodic",
-            "rest_period": {"value": 2, "unit": "min"},
-            "mqtt_publish": "House/Living_Room/Humidity/current"
-        },
-        {
-            "comment": "Current solar power from local JSON file.",
-            "sensor_id": "House/Solar/Power",
-            "json_file": "/var/log/solar.json",
-            "json_key":  ["solar", "creation", "power"],
-            "factor": 1,
-            "offset": 0,
-            "trigger": "periodic",
-            "rest_period": {"value": 5, "unit": "s"},
-            "mqtt_publish": "House/Solar/Power/current",
-            "homematic_publish": "23674"
-        }
-    ],
-
-    "logbooks": [
-        {
-            "filename": "weather.txt",
-            "cycle_time": {"value": 5, "unit": "min"},
-            "max_entries": 288,
-            "missing_data": "-",
-            "columns": [
-                {
-                    "title": "Temperature 15 minute average",
-                    "unit":  "°C",
-                    "sensor_id": "Weather/Temperature",
-                    "operation": "mean",
-                    "evaluation_period": {"value": 15, "unit": "min"},
-                    "mqtt_publish": "Weather/Temperature/average15min",
-                    "homematic_publish": "83472"
-                },
-                {
-                    "title": "Wind sensor rotation frequency",
-                    "unit":  "Hz",
-                    "sensor_id": "Weather/Wind",
-                    "operation": "freq",
-                    "mqtt_publish": "Weather/Wind/average15min",
-                    "homematic_publish": "75653"
-                }
-            ]
-        },
-        {
-            "filename": "house.txt",
-            "cycle_time": {"value": 15, "unit": "min"},
-            "max_entries": 48,
-            "missing_data": "-",
-            "columns": [
-                {
-                    "title": "Living room temperature",
-                    "unit":  "°C",
-                    "sensor_id": "House/Living_Room/Temperature",
-                    "operation": "mean",
-                    "mqtt_publish": "House/Living_Room/Temperature/average15min",
-                    "homematic_publish": "23545"
-                },
-                {
-                    "title": "Living room humidity",
-                    "unit":  "%rel.",
-                    "sensor_id": "House/Living_Room/Humidity",
-                    "operation": "mean",
-                    "mqtt_publish": "House/Living_Room/Humidity/average15min",
-                    "homematic_publish": "12736"
-                },
-                {
-                    "title": "Mean solar power (last 60 minutes)",
-                    "unit":  "W",
-                    "sensor_id": "House/Solar/Power",
-                    "operation": "mean",
-                    "evaluation_period": {"value": 1, "unit": "h"},
-                    "mqtt_publish": "House/Solar/Power/mean",
-                    "homematic_publish": "34653"
-                },
-                {
-                    "title": "Peak solar power (last 60 minutes)",
-                    "unit":  "W",
-                    "sensor_id": "House/Solar/Power",
-                    "operation": "max",
-                    "evaluation_period": {"value": 1, "unit": "h"},
-                    "mqtt_publish": "House/Solar/Power/peak",
-                    "homematic_publish": "34654"
-                }
-            ]
-        }
-    ]
+"general": {
+    "logfile": "/home/username/sensorlogger.log",
+    "loglevel": "info",
+    "http_timeout": 20,
+    "default_rest_period": {"value": 60, "unit": "s"},
+    "default_retry_time":  {"value": 10, "unit": "s"}
 }
 ```
 
++ `"logfile":` Path to a log file for status and error messages. Can be left blank or set to null if no log file is desired.
+
+    Standard value: `null`
+
++ `"loglevel":` Type of events that are logged. Can be any of the following:
+    - `"error"`: Only log error messages.
+    - `"warning"`: Log errors and warnings.
+    - `"info"`: Log errors, warnings and info messages.
+    - `"debug"`: Log errors, warnings, info and debug messages.
+
+    Standard value: `"info"`
+
++ `"http_timeout":` Timeout (in seconds) for HTTP requests.
+
+    Standard value: `10`
+
++ `"default_rest_period":` Default rest period for any sensor that doesn't specify its own rest period. The rest period is generally the time between two readouts of the same sensor. See specific sensor documentations for details. The numerical part for this parameter is set under `"value"`, its unit under `"unit"`. The following units are allowed: `"ms"`, `"s"`, `"min"`, `"h"`, `"d"`.
+
+    Standard value: 60 s
+
++ `"default_retry_time":` Default retry time for any sensor that doesn't specify its own retry time. When a sensor reading fails, the following attempt to read the sensor is made after the retry time (if it is shorter than the sensor's rest period). The numerical part for this parameter is set under `"value"`, its unit under `"unit"`. The following units are allowed: `"ms"`, `"s"`, `"min"`, `"h"`, `"d"`.
+
+    Standard value: 5 min
+
 ## Tinkerforge settings
 
-Currently, version 2.1.32 (2021-05-06) of the [Tinkerforge](https://www.tinkerforge.com/) C/C++ bindings are used. The following Tinkerforge Bricklets are supported. The table also lists the channel IDs if a Bricklet supports different types of measurements.
-
-| Sensor                         | Channels                                          |
-| ------------------------------ | ------------------------------------------------- |
-| Air Quality                    | `0`: Indoor air quality (IAQ) index               |
-|                                | `1`: Temperature                                  |
-|                                | `2`: Relative humidity                            |
-|                                | `3`: Air pressure                                 |
-| Ambient Light                  |                                                   |
-| Ambient Light 2.0              |                                                   |
-| Ambient Light 3.0              |                                                   |
-| Analog In                      |                                                   |
-| Analog In 2.0                  |                                                   |
-| Analog In 3.0                  |                                                   |
-| Barometer                      |                                                   |
-| Barometer 2.0                  |                                                   |
-| CO2                            |                                                   |
-| CO2 2.0                        | `0`: CO2 concentration                            |
-|                                | `1`: Temperature                                  |
-|                                | `2`: Relative humidity                            |
-| Current12                      |                                                   |
-| Current25                      |                                                   |
-| Distance IR                    |                                                   |
-| Distance IR 2.0                |                                                   |
-| Distance US                    |                                                   |
-| Distance US 2.0                |                                                   |
-| Dust                           |                                                   |
-| Energy Monitor                 | `0`: Voltage                                      |
-|                                | `1`: Current                                      |
-|                                | `2`: Energy                                       |
-|                                | `3`: Real power                                   |
-|                                | `4`: Apparent power                               |
-|                                | `5`: Reactive power                               |
-|                                | `6`: Power factor                                 |
-|                                | `7`: Frequency                                    |
-| Humidity                       |                                                   |
-| Humidity 2.0                   |                                                   |
-| Industrial Digital In 4        | `0` to `3`                                        |
-| Industrial Digital In 4 2.0    | `0` to `3`                                        |
-| Industrial Dual 0-20mA         | `0` to `1`                                        |
-| Industrial Dual 0-20mA 2.0     | `0` to `1`                                        |
-| Industrial Dual Analog In      | `0` to `1`                                        |
-| Industrial Dual Analog In 2.0  | `0` to `1`                                        |
-| IO4                            | `0` to `3`, also as a pulse counter               |
-| IO4 2.0                        | `0` to `3`, also as a pulse counter (not testet)  |
-| IO16                           | `0` to `15`, also as a pulse counter (not testet) |
-| IO16 2.0                       | `0` to `15`, also as a pulse counter (not testet) |
-| Laser Range Finder             |                                                   |
-| Laser Range Finder 2.0         |                                                   |
-| Line                           |                                                   |
-| Load Cell                      |                                                   |
-| Load Cell 2.0                  |                                                   |
-| Moisture                       |                                                   |
-| Particulate Matter             | `1` or `10`: PM1.0                                |
-|                                | `2` or `25`: PM2.5                                |
-|                                | `3` or `100`: PM10                                |
-| PTC Temperature                |                                                   |
-| PTC Temperature 2.0            |                                                   |
-| Sound Intensity                |                                                   |
-| Sound Pressure Level           |                                                   |
-| Temperature                    |                                                   |
-| Temperature 2.0                |                                                   |
-| Temperature IR                 | `0`: Ambient                                      |
-|                                | `1`: Object                                       |
-| Temperature IR 2.0             | `0`: Ambient                                      |
-|                                | `1`: Object                                       |
-| UV Light                       |                                                   |
-| UV Light 2.0                   |                                                   |
-| Voltage                        |                                                   |
-| Voltage/Current                | `0`: Voltage                                      |
-|                                | `1`: Current                                      |
-| Voltage/Current 2.0            | `0`: Voltage                                      |
-|                                | `1`: Current                                      |
+A list of supported Tinkerforge Bricklets can be found in the Annex at the end of this document.
 
 ### Connection to the Brick Daemon
 
@@ -457,7 +261,8 @@ On any normally running system, you should not use the restart parameters and in
         "homematic_publish": "12345",
         "counter": false,
         "trigger": "periodic",
-        "rest_period": {"value": 60, "unit": "s"}
+        "rest_period": {"value": 60, "unit": "s"},
+        "retry_time":  {"value": 30, "unit": "s"}
     },
     ...
 ]
@@ -475,7 +280,7 @@ On any normally running system, you should not use the restart parameters and in
 
     Standard value: `0`
 
-+ `"channel":` Channel that is supposed to be polled. Only relevant for Bricklets with multiple channels or measurement possibilities. The available channels are listed in the table above.
++ `"channel":` Channel that is supposed to be polled. Only relevant for Bricklets with multiple channels or measurement options. The available channels are listed in the table above.
 
     Standard value: `0`
 
@@ -503,7 +308,11 @@ On any normally running system, you should not use the restart parameters and in
 
 + `"rest_period":` Time for the sensor to rest between two measurements. The sensor is polled again after the rest period has passed. The numerical part for this parameter is set under `"value"`, its unit under `"unit"`. The following units are allowed: `"ms"`, `"s"`, `"min"`, `"h"`, `"d"`.
 
-    Standard value: 60 s, minimum: 100 ms
+    Standard value: `default_rest_period`, minimum: 100 ms
+
++ `"retry_time":` When the sensor reading fails, the following attempt to read the sensor is made after the retry time (if it is shorter than the sensor's rest period). The numerical part for this parameter is set under `"value"`, its unit under `"unit"`. The following units are allowed: `"ms"`, `"s"`, `"min"`, `"h"`, `"d"`.
+
+    Standard value: `default_retry_time`, minimum: 100 ms
 
 #### External triggers
 
@@ -575,7 +384,7 @@ Only Tinkerforge IO Bricklets are currently supported as external triggers.
 
     The numerical part for this parameter is set under `"value"`, its unit under `"unit"`. The following units are allowed: `"ms"`, `"s"`, `"min"`, `"h"`, `"d"`.
 
-    Standard value: 60 s
+    Standard value: `default_rest_period`
 
 + `"io_debounce":` Debounce time for the Brick Daemon to avoid multiple events from bouncing at the digital input of the IO Bricklet. The value is passed to the Brick Daemon upon [Callback registration](https://www.tinkerforge.com/en/doc/Software/Bricklets/IO4_Bricklet_C.html). The numerical part for this parameter is set under `"value"`, its unit under `"unit"`. The following units are allowed: `"ms"`, `"s"`, `"min"`, `"h"`, `"d"`.
 
@@ -723,7 +532,7 @@ The general `mqtt` section is used to configure the parameters for the connectio
 
 + `"rest_period":` Time for the sensor to rest between two measurements. This is the minimum time that must pass between two MQTT messages. Any measurements arriving within a shorter time period are rejected and not recorded. The numerical part for this parameter is set under `"value"`, its unit under `"unit"`. The following units are allowed: `"ms"`, `"s"`, `"min"`, `"h"`, `"d"`.
 
-    Standard value: 60 s
+    Standard value: `default_rest_period`
 
 
 
@@ -759,6 +568,7 @@ The root URL to reach the XML-API must be specified in the general `homematic` s
         "counter": false,
         "trigger": "periodic",
         "rest_period": {"value": 2, "unit": "min"},
+        "retry_time":  {"value": 30, "unit": "s"},
         "mqtt_publish": "House/Living_Room/Humidity/current"
     },
     ...
@@ -793,7 +603,11 @@ The root URL to reach the XML-API must be specified in the general `homematic` s
 
 + `"rest_period":` Time for the sensor to rest between two measurements. The variable is polled again after the rest period has passed. The numerical part for this parameter is set under `"value"`, its unit under `"unit"`. The following units are allowed: `"ms"`, `"s"`, `"min"`, `"h"`, `"d"`.
 
-    Standard value: 60 s
+    Standard value: `default_rest_period`, minimum: 100 ms
+
++ `"retry_time":` When the sensor reading fails, the following attempt to read the sensor is made after the retry time (if it is shorter than the sensor's rest period). The numerical part for this parameter is set under `"value"`, its unit under `"unit"`. The following units are allowed: `"ms"`, `"s"`, `"min"`, `"h"`, `"d"`.
+
+    Standard value: `default_retry_time`, minimum: 100 ms
 
 
 
@@ -812,7 +626,8 @@ JSON structures can be read from files or via HTTP(s) to serve as a source for s
         "offset": 0,
         "mqtt_publish": "House/Weather/Temperature/current",
         "homematic_publish": "12345",
-        "rest_period": {"value": 5, "unit": "s"}
+        "rest_period": {"value": 5, "unit": "s"},
+        "retry_time":  {"value": 2, "unit": "s"}
     },
     ...
 ]
@@ -848,7 +663,11 @@ JSON structures can be read from files or via HTTP(s) to serve as a source for s
 
 + `"rest_period":` Time for the sensor to rest between two measurements. The JSON file is polled again after the rest period has passed. The numerical part for this parameter is set under `"value"`, its unit under `"unit"`. The following units are allowed: `"ms"`, `"s"`, `"min"`, `"h"`, `"d"`.
 
-    Standard value: 60 s, Minimum: 100 ms
+    Standard value: `default_rest_period`, minimum: 100 ms
+
++ `"retry_time":` When the sensor reading fails, the following attempt to read the sensor is made after the retry time (if it is shorter than the sensor's rest period). The numerical part for this parameter is set under `"value"`, its unit under `"unit"`. The following units are allowed: `"ms"`, `"s"`, `"min"`, `"h"`, `"d"`.
+
+    Standard value: `default_retry_time`, minimum: 100 ms
 
 
 
@@ -1005,3 +824,76 @@ The `"columns"` key (as a child node of a logbooks object) always hosts a JSON a
     If both methods are defined, this outlier reduction has precedence and the one defined for `"confidence_absolute"` (previous point) is ignored.
 
     Standard value: `null`
+
+
+## Annex
+
+### Tinkerforge: Supported Bricklets
+
+Currently, version 2.1.33 (2022-05-11) of the [Tinkerforge](https://www.tinkerforge.com/) C/C++ bindings are used. The following Tinkerforge Bricklets are supported. The table also lists the channel IDs if a Bricklet supports different types of measurements.
+
+| Bricklet (and versions)             | Channels                                          |
+| :---------------------------------- | :------------------------------------------------ |
+| Air Quality                         | `0`: Indoor air quality (IAQ) index               |
+|                                     | `1`: Temperature                                  |
+|                                     | `2`: Relative humidity                            |
+|                                     | `3`: Air pressure                                 |
+| Ambient Light ver. 1, 2, 3          |                                                   |
+| Analog In ver. 1, 2, 3              |                                                   |
+| Barometer ver. 1, 2                 |                                                   |
+| CO2                                 |                                                   |
+| CO2 2.0                             | `0`: CO2 concentration                            |
+|                                     | `1`: Temperature                                  |
+|                                     | `2`: Relative humidity                            |
+| Current12                           |                                                   |
+| Current25                           |                                                   |
+| Distance IR ver. 1, 2               |                                                   |
+| Distance US ver. 1, 2               |                                                   |
+| Dust                                |                                                   |
+| Energy Monitor                      | `0`: Voltage                                      |
+|                                     | `1`: Current                                      |
+|                                     | `2`: Energy                                       |
+|                                     | `3`: Real power                                   |
+|                                     | `4`: Apparent power                               |
+|                                     | `5`: Reactive power                               |
+|                                     | `6`: Power factor                                 |
+|                                     | `7`: Frequency                                    |
+| GPS ver. 1                          | `0`: Latitude                                     |
+|                                     | `1`: Longitude                                    |
+|                                     | `6`: PDOP                                         |
+|                                     | `7`: HDOP                                         |
+|                                     | `8`: VDOP                                         |
+|                                     | `9`: EPE                                          |
+| GPS ver. 2, 3                       | `0`: Latitude                                     |
+|                                     | `1`: Longitude                                    |
+|                                     | `2`: Altitude (m)                                 |
+|                                     | `3`: Geoidal separation (m)                       |
+|                                     | `4`: Speed (km/h)                                 |
+|                                     | `5`: Course (°)                                   |
+|                                     | `6`: PDOP for GPS                                 |
+|                                     | `7`: HDOP for GPS                                 |
+|                                     | `8`: VDOP for GPS                                 |
+| Hall Effect ver. 2                  |                                                   |
+| Humidity ver. 1, 2                  |                                                   |
+| Industrial Digital In 4 ver. 1, 2   | `0` to `3`                                        |
+| Industrial Dual 0-20mA ver. 1, 2    | `0` to `1`                                        |
+| Industrial Dual Analog In ver. 1, 2 | `0` to `1`                                        |
+| IO4 ver. 1, 2                       | `0` to `3`, also as a pulse counter               |
+| IO16 ver. 1, 2                      | `0` to `15`, also as a pulse counter              |
+| Laser Range Finder ver. 1, 2        |                                                   |
+| Line                                |                                                   |
+| Load Cell ver. 1, 2                 |                                                   |
+| Moisture                            |                                                   |
+| Particulate Matter                  | `1` or `10`: PM1.0                                |
+|                                     | `2` or `25`: PM2.5                                |
+|                                     | `3` or `100`: PM10                                |
+| PTC Temperature ver. 1, 2           |                                                   |
+| Sound Intensity                     |                                                   |
+| Sound Pressure Level                |                                                   |
+| Temperature ver. 1, 2               |                                                   |
+| Temperature IR ver. 1, 2            | `0`: Ambient                                      |
+|                                     | `1`: Object                                       |
+| UV Light ver. 1, 2                  |                                                   |
+| Voltage                             |                                                   |
+| Voltage/Current ver. 1, 2           | `0`: Voltage                                      |
+|                                     | `1`: Current                                      |

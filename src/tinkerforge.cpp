@@ -1,3 +1,5 @@
+#ifdef OPTION_TINKERFORGE
+
 #include "tinkerforge.h"
 
 #include "logger.h"
@@ -88,7 +90,7 @@ bool tinkerforge::reconnect()
 			{
 				std::stringstream ss;
 				ss << "Unable to connect to Tinkerforge Brick Daemon at " << _host << ":" << _port << ".";
-				_root->message(ss.str(), true);
+				_root->error(ss.str());
 				disconnect_and_prepare();
 
 				return false;
@@ -97,16 +99,16 @@ bool tinkerforge::reconnect()
 			{
 				std::stringstream ss;
 				ss << "Successfully connected to Tinkerforge Brick Daemon at " << _host << ":" << _port << ".";
-				_root->message(ss.str(), false);
+				_root->info(ss.str());
 				
-				_root->message("Enumerating Tinkerforge Bricklets...", false);
+				_root->info("Enumerating Tinkerforge Bricklets...");
 				ipcon_register_callback(_ipcon, IPCON_CALLBACK_ENUMERATE, (void (*)(void))enumerateTFSensors, _root);
 				ipcon_enumerate(_ipcon);
 				std::this_thread::sleep_for(std::chrono::milliseconds(10000));
-				_root->message("Enumeration of Tinkerforge Bricklets done.", false);
+				_root->info("Enumeration of Tinkerforge Bricklets done.");
 
 				/*
-				_root->message("Registering Tinkerforge callbacks...", false);
+				_root->info("Registering Tinkerforge callbacks...");
 				for(size_t i=0; i<_root->nSensors(); ++i)
 				{
 					if(_root->getSensor(i)->type() == sensor_tinkerforge)
@@ -117,13 +119,13 @@ bool tinkerforge::reconnect()
 						{
 							std::stringstream cbss;
 							cbss << "  Register callback for Bricklet \'" << tfSensor->getUID() << "\' (" << getDeviceType_name(tfSensor->getDeviceType()) << "), debounce period: "<< tfSensor->getDebounceTime() << " ms.";
-							_root->message(cbss.str(), false);
+							_root->info(cbss.str());
 
 							tfSensor->registerCallback();
 						}
 					}
 				}
-				_root->message("Registration of Tinkerforge callbacks done.", false);
+				_root->info("Registration of Tinkerforge callbacks done.");
 				*/
 
 				return true;
@@ -133,7 +135,7 @@ bool tinkerforge::reconnect()
 		{
 			std::stringstream ss_state;
 			ss_state << "Connecting to Tinkerforge Brick Daemon at " << _host << ":" << _port << "...";
-			_root->message(ss_state.str(), false);
+			_root->info(ss_state.str());
 
 			return false;
 		}
@@ -307,6 +309,14 @@ std::string getDeviceType_name(uint16_t device_identifier)
 			return VOLTAGE_CURRENT_DEVICE_DISPLAY_NAME; break;
 		case(VOLTAGE_CURRENT_V2_DEVICE_IDENTIFIER):
 			return VOLTAGE_CURRENT_V2_DEVICE_DISPLAY_NAME; break;
+		case(HALL_EFFECT_V2_DEVICE_IDENTIFIER):
+			return HALL_EFFECT_V2_DEVICE_DISPLAY_NAME; break;
+		case(GPS_DEVICE_IDENTIFIER):
+			return GPS_DEVICE_DISPLAY_NAME; break;
+		case(GPS_V2_DEVICE_IDENTIFIER):
+			return GPS_V2_DEVICE_DISPLAY_NAME; break;
+		case(GPS_V3_DEVICE_IDENTIFIER):
+			return GPS_V3_DEVICE_DISPLAY_NAME; break;
 	}
 
 	return "Unknown";
@@ -327,7 +337,7 @@ void enumerateTFSensors(const char *uid, const char *connected_uid, char positio
 	{
 		std::stringstream ss;
 		ss<<"Found Bricklet \'"<<std::string(uid)<<"\' with device identifier "<<getDeviceType_nice(device_identifier) <<".";
-		_root->message(ss.str(), false);
+		_root->info(ss.str());
 
 		for(size_t s=0; s<_root->nSensors(); ++s)
 		{
@@ -343,7 +353,7 @@ void enumerateTFSensors(const char *uid, const char *connected_uid, char positio
 					{
 						std::stringstream cbss;
 						cbss << "  Register callback for Bricklet \'" << tfsensor->getUID() << "\' (" << getDeviceType_name(tfsensor->getDeviceType()) << "), debounce period: "<< tfsensor->getDebounceTime() << " ms.";
-						_root->message(cbss.str(), false);
+						_root->info(cbss.str());
 
 						tfsensor->registerCallback();
 					}
@@ -352,3 +362,5 @@ void enumerateTFSensors(const char *uid, const char *connected_uid, char positio
 		}
 	}
 }
+
+#endif
