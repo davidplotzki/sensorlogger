@@ -77,7 +77,8 @@ We now use git to download the [Eclipse Paho MQTT C library](https://github.com/
 
     git clone https://github.com/eclipse/paho.mqtt.c
     cd paho.mqtt.c
-    make install
+    sudo make install
+    cd ..
 
 In the next step follows the [Eclipse Paho MQTT C++ library](https://github.com/eclipse/paho.mqtt.cpp). If you also want to install the documentation and compile the examples, set the corresponding flags in the following command in the third line to `TRUE`.
 
@@ -86,6 +87,7 @@ In the next step follows the [Eclipse Paho MQTT C++ library](https://github.com/
     cmake -Bbuild -H. -DPAHO_BUILD_DOCUMENTATION=FALSE -DPAHO_BUILD_SAMPLES=FALSE
     sudo cmake --build build/ --target install
     sudo ldconfig
+    cd ..
 
 ### Tinkerforge Support
 
@@ -114,17 +116,17 @@ It is recommended to run Sensorlogger with restricted privileges. The setup proc
 	# /etc/systemd/system/sensorlogger.service
 	# ------------------------------------------
 	# systemctl daemon-reload
-	# systemctl enable sensorlogger 
-	
+	# systemctl enable sensorlogger
+
 	[Unit]
 	Description=Sensorlogger
-	
+
 	[Service]
 	WorkingDirectory=/home/username
 	ExecStart=/home/username/sensorlogger /home/username/config.json
 	User=username
 	Group=users
-	
+
 	[Install]
 	WantedBy=multi-user.target
 
@@ -212,7 +214,7 @@ The general `tinkerforge` section is used to configure the connection parameters
     "max_bricklet_read_failures":  8,
     "max_brickd_restart_attempts": 3,
     "brickd_restart_command": "sudo /bin/systemctl restart brickd",
-    "system_restart_command": "sudo /bin/systemctl --force reboot"  
+    "system_restart_command": "sudo /bin/systemctl --force reboot"
 }
 ```
 + `"host":` Hostname or IP address where the Tinkerforge Brick Daemon can be reached. May be omitted or set to `null` if you don’t want to configure any Tinkerforge sensors.
